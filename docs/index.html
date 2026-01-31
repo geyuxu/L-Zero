@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>L-Zero - The Native Language of AI Agents</title>
+    <title>L-Zero - Let AI Build Software For You</title>
     <style>
         :root {
             --bg-dark: #0d1117;
@@ -18,20 +18,15 @@
             --border-color: #30363d;
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
             background: var(--bg-dark);
             color: var(--text-primary);
-            line-height: 1.6;
+            line-height: 1.7;
         }
 
-        /* GitHub Ribbon */
         .github-ribbon {
             position: fixed;
             top: 0;
@@ -63,70 +58,41 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
 
-        .github-ribbon a:hover span {
-            background: #2ea043;
-        }
+        .github-ribbon a:hover span { background: #2ea043; }
 
-        /* Container */
         .container {
-            max-width: 1200px;
+            max-width: 900px;
             margin: 0 auto;
             padding: 0 24px;
         }
 
-        /* Hero Section */
+        /* Hero */
         .hero {
-            padding: 80px 0 60px;
+            padding: 100px 0 80px;
             text-align: center;
-            border-bottom: 1px solid var(--border-color);
         }
 
         .hero h1 {
-            font-size: 4rem;
+            font-size: 3.5rem;
             font-weight: 700;
-            margin-bottom: 16px;
+            margin-bottom: 24px;
             background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
 
-        .hero .subtitle {
+        .hero .tagline {
             font-size: 1.5rem;
             color: var(--text-secondary);
-            margin-bottom: 24px;
+            margin-bottom: 32px;
         }
 
         .hero .description {
-            font-size: 1.1rem;
+            font-size: 1.15rem;
             color: var(--text-secondary);
-            max-width: 700px;
-            margin: 0 auto 32px;
-        }
-
-        .stats {
-            display: flex;
-            gap: 48px;
-            justify-content: center;
-            margin-bottom: 32px;
-            flex-wrap: wrap;
-        }
-
-        .stat {
-            text-align: center;
-        }
-
-        .stat-value {
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: var(--accent-blue);
-        }
-
-        .stat-label {
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            max-width: 650px;
+            margin: 0 auto 40px;
         }
 
         .cta-buttons {
@@ -137,9 +103,9 @@
         }
 
         .btn {
-            padding: 12px 24px;
-            border-radius: 6px;
-            font-size: 1rem;
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 1.05rem;
             font-weight: 600;
             text-decoration: none;
             transition: all 0.2s;
@@ -150,9 +116,7 @@
             color: #fff;
         }
 
-        .btn-primary:hover {
-            background: #2ea043;
-        }
+        .btn-primary:hover { background: #2ea043; }
 
         .btn-secondary {
             background: var(--bg-card);
@@ -160,14 +124,12 @@
             border: 1px solid var(--border-color);
         }
 
-        .btn-secondary:hover {
-            border-color: var(--text-secondary);
-        }
+        .btn-secondary:hover { border-color: var(--text-secondary); }
 
         /* Sections */
         section {
-            padding: 60px 0;
-            border-bottom: 1px solid var(--border-color);
+            padding: 80px 0;
+            border-top: 1px solid var(--border-color);
         }
 
         section h2 {
@@ -176,489 +138,270 @@
             color: var(--text-primary);
         }
 
-        section h3 {
-            font-size: 1.3rem;
-            margin: 24px 0 12px;
-            color: var(--text-primary);
+        section p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            margin-bottom: 20px;
         }
 
-        /* Code Blocks */
+        /* Workflow */
+        .workflow {
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+            margin-top: 40px;
+        }
+
+        .workflow-step {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+        }
+
+        .step-number {
+            width: 48px;
+            height: 48px;
+            background: var(--accent-blue);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .step-content h3 {
+            font-size: 1.3rem;
+            margin-bottom: 8px;
+        }
+
+        .step-content p {
+            margin-bottom: 0;
+            font-size: 1rem;
+        }
+
+        /* Code blocks */
         pre {
             background: var(--bg-code);
             border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 16px;
+            border-radius: 8px;
+            padding: 20px;
             overflow-x: auto;
             font-family: 'SF Mono', 'Fira Code', monospace;
             font-size: 14px;
-            margin: 16px 0;
+            margin: 20px 0;
         }
 
         code {
             font-family: 'SF Mono', 'Fira Code', monospace;
             background: var(--bg-code);
-            padding: 2px 6px;
+            padding: 3px 8px;
             border-radius: 4px;
             font-size: 0.9em;
         }
 
-        pre code {
-            background: none;
-            padding: 0;
-        }
+        pre code { background: none; padding: 0; }
 
-        /* Tables */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 16px 0;
-            font-size: 0.95rem;
-        }
-
-        th, td {
-            padding: 12px 16px;
-            text-align: left;
-            border: 1px solid var(--border-color);
-        }
-
-        th {
-            background: var(--bg-card);
-            font-weight: 600;
-        }
-
-        tr:nth-child(even) {
-            background: var(--bg-card);
-        }
-
-        /* Architecture */
-        .architecture-diagram {
-            background: var(--bg-code);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 24px;
-            font-family: monospace;
-            white-space: pre;
-            overflow-x: auto;
-            font-size: 13px;
-            line-height: 1.4;
-        }
-
-        /* Feature Cards */
+        /* Features */
         .features {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 24px;
-            margin-top: 24px;
+            margin-top: 32px;
         }
 
         .feature-card {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 24px;
+            border-radius: 12px;
+            padding: 28px;
         }
 
-        .feature-card h4 {
-            font-size: 1.1rem;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .feature-card p {
-            color: var(--text-secondary);
-            font-size: 0.95rem;
-        }
-
-        /* Tool Categories */
-        .tool-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 16px;
-            margin-top: 16px;
-        }
-
-        .tool-category {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 16px;
-        }
-
-        .tool-category h4 {
-            font-size: 1rem;
-            margin-bottom: 8px;
+        .feature-card h3 {
+            font-size: 1.2rem;
+            margin-bottom: 12px;
             color: var(--accent-blue);
         }
 
-        .tool-category code {
-            display: inline-block;
-            margin: 2px;
-            font-size: 0.8rem;
+        .feature-card p {
+            font-size: 1rem;
+            margin-bottom: 0;
+        }
+
+        /* Architecture diagram */
+        .architecture {
+            background: var(--bg-code);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 32px;
+            margin: 32px 0;
+            text-align: center;
+        }
+
+        .arch-flow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            font-size: 1.1rem;
+        }
+
+        .arch-box {
+            background: var(--bg-card);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px 24px;
+            font-weight: 600;
+        }
+
+        .arch-box.highlight { border-color: var(--accent-blue); color: var(--accent-blue); }
+        .arch-box.ai { border-color: var(--accent-purple); color: var(--accent-purple); }
+
+        .arch-arrow {
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        /* Principles */
+        .principles {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 32px;
+        }
+
+        .principle {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .principle h4 {
+            color: var(--accent-green);
+            margin-bottom: 8px;
+        }
+
+        .principle p {
+            font-size: 0.95rem;
+            margin-bottom: 0;
         }
 
         /* Footer */
         footer {
-            padding: 40px 0;
+            padding: 60px 0;
             text-align: center;
-            color: var(--text-secondary);
+            border-top: 1px solid var(--border-color);
         }
+
+        footer p { color: var(--text-secondary); margin-bottom: 12px; }
 
         footer a {
             color: var(--accent-blue);
             text-decoration: none;
         }
 
-        footer a:hover {
-            text-decoration: underline;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .hero h1 {
-                font-size: 2.5rem;
-            }
-
-            .stats {
-                gap: 24px;
-            }
-
-            .architecture-diagram {
-                font-size: 11px;
-            }
-        }
+        footer a:hover { text-decoration: underline; }
 
         .highlight-blue { color: var(--accent-blue); }
         .highlight-green { color: var(--accent-green); }
         .highlight-purple { color: var(--accent-purple); }
-        .highlight-orange { color: var(--accent-orange); }
+
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.5rem; }
+            .workflow-step { flex-direction: column; align-items: center; text-align: center; }
+            .arch-flow { flex-direction: column; }
+            .arch-arrow { transform: rotate(90deg); }
+        }
     </style>
 </head>
 <body>
-    <!-- GitHub Ribbon -->
     <div class="github-ribbon">
         <a href="https://github.com/geyuxu/L-Zero" target="_blank" rel="noopener">
             <span>View on GitHub</span>
         </a>
     </div>
 
-    <!-- Hero Section -->
+    <!-- Hero -->
     <header class="hero">
         <div class="container">
             <h1>L-Zero</h1>
-            <p class="subtitle">The Native Language of AI Agents</p>
+            <p class="tagline">Let AI Build Software For You</p>
             <p class="description">
-                A low-level, structural instruction set designed specifically for AI generation.
-                52 primitives. Semantic computing. Governance protocol.
-                The language that lets AI sense and respond to semantic drift.
+                L-Zero is an instruction set designed for AI agents to generate executable programs.
+                Just download the runtime, feed your AI the documentation, describe what you want,
+                and watch it build.
             </p>
-
-            <div class="stats">
-                <div class="stat">
-                    <div class="stat-value">52</div>
-                    <div class="stat-label">ISA Primitives</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">40+</div>
-                    <div class="stat-label">Tools</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">256</div>
-                    <div class="stat-label">Registers</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">AOT</div>
-                    <div class="stat-label">Compilation</div>
-                </div>
-            </div>
-
             <div class="cta-buttons">
-                <a href="https://github.com/geyuxu/L-Zero" class="btn btn-primary">Get Started</a>
-                <a href="https://github.com/geyuxu/L-Zero/blob/main/BOOT.md" class="btn btn-secondary">Documentation</a>
+                <a href="https://github.com/geyuxu/L-Zero/releases" class="btn btn-primary">Download</a>
+                <a href="https://github.com/geyuxu/L-Zero/blob/main/BOOT.md" class="btn btn-secondary">BOOT.md</a>
             </div>
         </div>
     </header>
 
-    <!-- Quick Start -->
-    <section id="quickstart">
+    <!-- How It Works -->
+    <section id="how">
         <div class="container">
-            <h2>Quick Start</h2>
+            <h2>How It Works</h2>
+            <p>Three simple steps. No coding required.</p>
 
-            <h3>1. Build</h3>
-            <pre><code>cargo build --release --workspace</code></pre>
+            <div class="workflow">
+                <div class="workflow-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Download L-Zero Runtime</h3>
+                        <p>Get the pre-built binaries for your platform. Includes the VM, assembler, and plugins for database, HTTP, file I/O, and more.</p>
+                    </div>
+                </div>
 
-            <h3>2. Run Examples</h3>
-            <pre><code># Standard workflow: ASM -> Bytecode -> Execute
-./target/release/l0asm examples/hello_world.asm > hello.l0
-./target/release/l0vm hello.l0
+                <div class="workflow-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Give Your AI the BOOT.md</h3>
+                        <p>BOOT.md is the complete language specification. Paste it into your AI's context (Claude, GPT, etc.) so it understands how to write L-Zero programs.</p>
+                    </div>
+                </div>
 
-# AOT compile to native binary
-./target/release/l0cc hello.l0 -o program.c
-gcc -O2 program.c -o program && ./program</code></pre>
+                <div class="workflow-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Describe What You Want</h3>
+                        <p>"Build a blog with a SQLite database and HTTP server." The AI generates a <code>.asm</code> file, you compile and run it. Done.</p>
+                    </div>
+                </div>
+            </div>
 
-            <h3>3. Hello World</h3>
-            <pre><code># hello_world.asm
-SETS 1, "Hello, L-Zero!"
-TEXEC 0x5000, 1, 255    # PRINT
+            <div class="architecture">
+                <div class="arch-flow">
+                    <div class="arch-box ai">Your Prompt</div>
+                    <div class="arch-arrow">+</div>
+                    <div class="arch-box">BOOT.md</div>
+                    <div class="arch-arrow">→</div>
+                    <div class="arch-box ai">AI Agent</div>
+                    <div class="arch-arrow">→</div>
+                    <div class="arch-box highlight">.asm</div>
+                    <div class="arch-arrow">→</div>
+                    <div class="arch-box">L-Zero VM</div>
+                    <div class="arch-arrow">→</div>
+                    <div class="arch-box highlight">Product</div>
+                </div>
+            </div>
+
+            <pre><code># Example: Ask your AI to build a web server
+# AI generates this .asm file:
+
+SETS 1, "8080"
+TEXEC 0x8000, 1, 255        # HTTP_INIT on port 8080
+
+SETS 10, "GET /|Hello, World!"
+TEXEC 0x8001, 10, 255       # Register route
+
+SETS 20, "10"
+TEXEC 0x8002, 20, 255       # Serve 10 requests
+
 HALT</code></pre>
-        </div>
-    </section>
-
-    <!-- Architecture -->
-    <section id="architecture">
-        <div class="container">
-            <h2>Three-Layer Architecture</h2>
-
-            <div class="architecture-diagram">+---------------------------------------------------------------+
-| <span class="highlight-blue">Layer 1: ISA Core (52 primitives)</span>                             |
-| ------------------------------------------------------------- |
-| - Register-based operations, compiled into VM                 |
-| - ADD, SUB, MUL, DIV, MOD, SCAT, HLEN, REGEX, VSIM, etc.      |
-| - Fast, direct execution                                      |
-+---------------------------------------------------------------+
-                              |
-                              | TEXEC 0x5xxx
-                              v
-+---------------------------------------------------------------+
-| <span class="highlight-green">Layer 2: Builtins</span>                                             |
-| ------------------------------------------------------------- |
-| - String-based I/O, no external process                       |
-| - PRINT, INPUT, RAND, TIME, UPPER, LOWER, etc.               |
-+---------------------------------------------------------------+
-                              |
-                              | TEXEC 0x3xxx-0x9xxx
-                              v
-+---------------------------------------------------------------+
-| <span class="highlight-purple">Layer 3: Plugins</span>                                              |
-| ------------------------------------------------------------- |
-| - External subprocess, JSON-RPC protocol                      |
-| - DB, HTTP, File, JSON, AI                                    |
-| - Cross-language support (Rust, Python, Swift, etc.)         |
-+---------------------------------------------------------------+</div>
-
-            <div class="features">
-                <div class="feature-card">
-                    <h4><span class="highlight-blue">ISA Core</span></h4>
-                    <p>52 primitives for computation, memory, vectors, and governance. Register-based, type-safe, deterministic.</p>
-                </div>
-                <div class="feature-card">
-                    <h4><span class="highlight-green">Builtins</span></h4>
-                    <p>Built-in I/O, string, and math operations. No external process needed. Fast and simple.</p>
-                </div>
-                <div class="feature-card">
-                    <h4><span class="highlight-purple">Plugins</span></h4>
-                    <p>External capabilities via JSON-RPC. Database, HTTP, File, AI. Infinitely extensible.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ISA Reference -->
-    <section id="isa">
-        <div class="container">
-            <h2>ISA Reference (52 Instructions)</h2>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>Category</th>
-                        <th>Count</th>
-                        <th>Instructions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>System</td>
-                        <td>6</td>
-                        <td><code>NOP</code> <code>HALT</code> <code>PANIC</code> <code>DUMP</code> <code>GAS</code> <code>ASSERT</code></td>
-                    </tr>
-                    <tr>
-                        <td>Registers</td>
-                        <td>4</td>
-                        <td><code>SET</code> <code>SETS</code> <code>MOV</code> <code>SWAP</code></td>
-                    </tr>
-                    <tr>
-                        <td>Math</td>
-                        <td>5</td>
-                        <td><code>ADD</code> <code>SUB</code> <code>MUL</code> <code>DIV</code> <code>MOD</code></td>
-                    </tr>
-                    <tr>
-                        <td>Logic</td>
-                        <td>4</td>
-                        <td><code>AND</code> <code>OR</code> <code>XOR</code> <code>NOT</code></td>
-                    </tr>
-                    <tr>
-                        <td>Control</td>
-                        <td>5</td>
-                        <td><code>CMP</code> <code>JMP</code> <code>BEQ</code> <code>BGT</code> <code>BLT</code></td>
-                    </tr>
-                    <tr>
-                        <td>Memory</td>
-                        <td>4</td>
-                        <td><code>NEW</code> <code>FREE</code> <code>READ</code> <code>WRITE</code></td>
-                    </tr>
-                    <tr>
-                        <td>Extensions</td>
-                        <td>9</td>
-                        <td><code>TEXEC</code> <code>ITOA</code> <code>ATOI</code> <code>SCAT</code> <code>REGEX</code> <code>READR</code> <code>WRITER</code> <code>STORE64</code> <code>LOAD64</code></td>
-                    </tr>
-                    <tr>
-                        <td>Batch</td>
-                        <td>4</td>
-                        <td><code>MEMCPY</code> <code>HLEN</code> <code>SLICE</code> <code>MEMSET</code></td>
-                    </tr>
-                    <tr>
-                        <td><span class="highlight-blue">Vector</span></td>
-                        <td>7</td>
-                        <td><code>VNEW</code> <code>VSET</code> <code>VGET</code> <code>VDOT</code> <code>VSIM</code> <code>VMAG</code> <code>VNORM</code></td>
-                    </tr>
-                    <tr>
-                        <td><span class="highlight-orange">Governance</span></td>
-                        <td>4</td>
-                        <td><code>LATCH</code> <code>GUARD</code> <code>TRAP</code> <code>YIELD</code></td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <!-- Toolchain -->
-    <section id="toolchain">
-        <div class="container">
-            <h2>Toolchain</h2>
-
-            <div class="architecture-diagram">+-----------+   l0asm   +-----------+   l0vm    +-----------+
-|  <span class="highlight-green">.asm</span>     | --------> |  <span class="highlight-blue">.l0</span>      | --------> |  Execute  |
-|  Assembly |           |  Bytecode |           |  Result   |
-+-----------+           +-----------+           +-----------+
-                              |
-                              | l0cc
-                              v
-                        +-----------+    gcc    +-----------+
-                        |  <span class="highlight-purple">.c</span>       | --------> |  Native   |
-                        |  C Code   |           |  Binary   |
-                        +-----------+           +-----------+</div>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>Binary</th>
-                        <th>Description</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><code>l0vm</code></td>
-                        <td>Virtual Machine - executes .l0 bytecode</td>
-                    </tr>
-                    <tr>
-                        <td><code>l0asm</code></td>
-                        <td>Assembler - compiles .asm to .l0 bytecode</td>
-                    </tr>
-                    <tr>
-                        <td><code>l0cc</code></td>
-                        <td>AOT Compiler - compiles .l0 to C code (with supervisor protocol)</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <!-- Tools & Plugins -->
-    <section id="tools">
-        <div class="container">
-            <h2>Tools & Plugins</h2>
-            <p>The <code>TEXEC</code> instruction invokes capabilities defined in <code>tools.json</code>:</p>
-
-            <div class="tool-grid">
-                <div class="tool-category">
-                    <h4>I/O (0x5xxx)</h4>
-                    <code>PRINT</code> <code>PRINTN</code> <code>INPUT</code> <code>RAND</code> <code>TIME</code>
-                </div>
-                <div class="tool-category">
-                    <h4>String (0x5xxx)</h4>
-                    <code>UPPER</code> <code>LOWER</code> <code>TRIM</code> <code>SUBSTR</code> <code>SPLIT</code>
-                </div>
-                <div class="tool-category">
-                    <h4>Math (0x5xxx)</h4>
-                    <code>ABS</code> <code>MIN</code> <code>MAX</code> <code>POW</code>
-                </div>
-                <div class="tool-category">
-                    <h4>File (0x4xxx)</h4>
-                    <code>FILE_READ</code> <code>FILE_WRITE</code> <code>FILE_DELETE</code> <code>FILE_LIST</code> <code>FILE_EXISTS</code>
-                </div>
-                <div class="tool-category">
-                    <h4>JSON (0x6xxx)</h4>
-                    <code>JSON_LOAD</code> <code>JSON_SAVE</code> <code>JSON_GET</code> <code>JSON_SET</code> <code>JSON_PARSE</code>
-                </div>
-                <div class="tool-category">
-                    <h4>HTTP (0x8xxx)</h4>
-                    <code>HTTP_INIT</code> <code>HTTP_ROUTE</code> <code>HTTP_SERVE</code> <code>HTTP_REQUEST</code>
-                </div>
-                <div class="tool-category">
-                    <h4>Database (0x9xxx)</h4>
-                    <code>DB_INIT</code> <code>DB_CREATE_TABLE</code> <code>DB_INSERT</code> <code>DB_SELECT</code> <code>DB_UPDATE</code> <code>DB_DELETE</code>
-                </div>
-                <div class="tool-category">
-                    <h4>AI (0x3xxx)</h4>
-                    <code>AI_EMBED</code> <code>AI_GENERATE</code>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Semantic Computing -->
-    <section id="semantic">
-        <div class="container">
-            <h2>Semantic Computing</h2>
-            <p>L-Zero provides native vector operations for AI agents to monitor semantic drift:</p>
-
-            <pre><code># Create embedding vectors
-SET 10, 768            # embedding dimension
-VNEW 1, 10             # target vector
-VNEW 2, 10             # current state vector
-
-# Compute cosine similarity
-VSIM 3, 1, 2           # R3 = cosine_similarity * 1,000,000
-
-# Governance: drift detection
-SET 30, 800000         # threshold = 0.8
-LATCH 1, 30            # set target vector and threshold
-GUARD 2                # check state; TRAP if drift detected</code></pre>
-
-            <p style="margin-top: 16px; color: var(--text-secondary);">
-                When drift is detected, <code>GUARD</code> triggers <code>TRAP</code> which suspends execution
-                and emits JSON context to stdout for supervisor intervention.
-            </p>
-        </div>
-    </section>
-
-    <!-- Installation -->
-    <section id="install">
-        <div class="container">
-            <h2>Installation</h2>
-
-            <h3>From Source</h3>
-            <pre><code>git clone https://github.com/geyuxu/L-Zero.git
-cd L-Zero
-cargo build --release --workspace</code></pre>
-
-            <h3>From Release Package</h3>
-            <pre><code># Download and extract
-tar xzf l0-lang-v1.0.0-darwin-arm64.tar.gz
-cd l0-lang-v1.0.0-darwin-arm64
-
-# User install (recommended)
-./install.sh              # Install to ~/.l0
-
-# System install
-./install.sh --system     # Install to /usr/local/l0</code></pre>
-
-            <h3>Environment Setup</h3>
-            <pre><code># Add to ~/.bashrc or ~/.zshrc
-export L0_HOME="$HOME/.l0"
-export PATH="$L0_HOME/bin:$PATH"</code></pre>
         </div>
     </section>
 
@@ -666,47 +409,128 @@ export PATH="$L0_HOME/bin:$PATH"</code></pre>
     <section id="why">
         <div class="container">
             <h2>Why L-Zero?</h2>
+            <p>
+                Traditional programming languages are designed for humans to read and write.
+                But when AI generates code, human readability doesn't matter.
+                What matters is <strong>determinism</strong>, <strong>safety</strong>, and <strong>execution</strong>.
+            </p>
 
             <div class="features">
                 <div class="feature-card">
-                    <h4>For AI Agents</h4>
-                    <p>Designed for machine generation, not human writing. ASM format optimizes token efficiency and eliminates parsing errors.</p>
+                    <h3>AI-Native Format</h3>
+                    <p>Assembly syntax minimizes tokens. One instruction per line. No syntax errors from missing brackets or commas. AI generates valid code the first time.</p>
                 </div>
+
                 <div class="feature-card">
-                    <h4>Type-Safe</h4>
-                    <p>Based on strict Rust Enum definition, ensuring 100% valid instruction structure. No runtime type errors.</p>
+                    <h3>Type-Safe by Design</h3>
+                    <p>52 instructions, each with a strict schema. If it compiles, it runs. No runtime type errors. No undefined behavior.</p>
                 </div>
+
                 <div class="feature-card">
-                    <h4>Semantic Aware</h4>
-                    <p>Native vector operations and governance primitives let AI agents monitor and respond to semantic drift autonomously.</p>
+                    <h3>Self-Describing</h3>
+                    <p>BOOT.md is both documentation and specification. AI reads it once and knows everything: ISA, tools, plugins, examples.</p>
                 </div>
+
                 <div class="feature-card">
-                    <h4>Extensible</h4>
-                    <p>52 core primitives + infinite capability via dynamic plugins. Add new tools without recompiling the VM.</p>
+                    <h3>Full-Stack Capabilities</h3>
+                    <p>Database (SQLite), HTTP server, file I/O, JSON, regex - all included. Build complete applications, not just scripts.</p>
                 </div>
+
                 <div class="feature-card">
-                    <h4>AOT Compilation</h4>
-                    <p>Compile to native C code for maximum performance. Same governance protocol works in both VM and AOT modes.</p>
+                    <h3>Semantic Governance</h3>
+                    <p>Vector operations and drift detection let AI agents self-monitor. When behavior drifts, execution pauses for human review.</p>
                 </div>
+
                 <div class="feature-card">
-                    <h4>Self-Describing</h4>
-                    <p>Query the VM with <code>--info</code> to discover ISA and available tools. Code as documentation.</p>
+                    <h3>AOT Compilation</h3>
+                    <p>Compile to native C code for maximum performance. Same program runs on VM during development, native binary in production.</p>
                 </div>
             </div>
+        </div>
+    </section>
+
+    <!-- The Principle -->
+    <section id="principle">
+        <div class="container">
+            <h2>The Principle</h2>
+            <p>
+                L-Zero flips the traditional model. Instead of humans writing code that machines execute,
+                <strong>AI writes code that machines execute</strong>. The human's job is to describe intent.
+            </p>
+
+            <div class="principles">
+                <div class="principle">
+                    <h4>Machine Determinism</h4>
+                    <p>Every instruction has exactly one meaning. No ambiguity. No interpretation. Perfect reproducibility.</p>
+                </div>
+                <div class="principle">
+                    <h4>Token Efficiency</h4>
+                    <p>Assembly format uses minimal tokens. More capability per context window. Lower API costs.</p>
+                </div>
+                <div class="principle">
+                    <h4>Sandboxed Execution</h4>
+                    <p>256 registers, managed heap, plugin isolation. AI-generated code can't escape its sandbox.</p>
+                </div>
+                <div class="principle">
+                    <h4>Extensible Tools</h4>
+                    <p>Core ISA (52 instructions) + unlimited plugins. Add capabilities without changing the language.</p>
+                </div>
+            </div>
+
+            <p style="margin-top: 40px;">
+                L-Zero is not a language for humans to learn. It's a language for AI to speak.
+                You speak requirements. AI speaks L-Zero. The machine executes.
+            </p>
+        </div>
+    </section>
+
+    <!-- Get Started -->
+    <section id="start">
+        <div class="container">
+            <h2>Get Started</h2>
+
+            <div class="features" style="grid-template-columns: 1fr 1fr;">
+                <div class="feature-card">
+                    <h3>1. Download</h3>
+                    <p>Grab the latest release for your platform from GitHub Releases. Includes all binaries and plugins.</p>
+                    <p style="margin-top: 16px;">
+                        <a href="https://github.com/geyuxu/L-Zero/releases" class="btn btn-primary" style="display: inline-block;">Download Release</a>
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <h3>2. Get BOOT.md</h3>
+                    <p>Copy BOOT.md into your AI's context. This is the complete language reference - ISA, tools, examples, everything.</p>
+                    <p style="margin-top: 16px;">
+                        <a href="https://github.com/geyuxu/L-Zero/blob/main/BOOT.md" class="btn btn-secondary" style="display: inline-block;">View BOOT.md</a>
+                    </p>
+                </div>
+            </div>
+
+            <pre style="margin-top: 32px;"><code># After downloading, install:
+./install.sh              # User install to ~/.l0
+./install.sh --system     # System install to /usr/local/l0
+
+# Then run any .asm file your AI generates:
+l0asm my_app.asm > my_app.l0
+l0vm my_app.l0</code></pre>
         </div>
     </section>
 
     <!-- Footer -->
     <footer>
         <div class="container">
-            <p>L-Zero v1.0 | 52 ISA Primitives | Semantic Computing</p>
-            <p style="margin-top: 8px;">
-                <a href="https://github.com/geyuxu/L-Zero">GitHub</a> &middot;
-                <a href="https://github.com/geyuxu/L-Zero/blob/main/BOOT.md">Documentation</a> &middot;
+            <p style="font-size: 1.2rem; color: var(--text-primary); margin-bottom: 16px;">
+                L-Zero v1.0 — The Native Language of AI Agents
+            </p>
+            <p>
+                <a href="https://github.com/geyuxu/L-Zero">GitHub</a> ·
+                <a href="https://github.com/geyuxu/L-Zero/blob/main/BOOT.md">BOOT.md</a> ·
+                <a href="https://github.com/geyuxu/L-Zero/releases">Releases</a> ·
                 <a href="https://github.com/geyuxu/L-Zero/blob/main/LICENSE">MIT License</a>
             </p>
-            <p style="margin-top: 16px; font-size: 0.9rem;">
-                The Native Language of Autonomous AI
+            <p style="margin-top: 24px; font-size: 0.9rem;">
+                You describe. AI builds. Machine executes.
             </p>
         </div>
     </footer>
