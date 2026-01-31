@@ -72,16 +72,9 @@ fn main() {
             // "SETS 1, Hello World" -> args: ["1", "Hello World"]
             // "PANIC Error" -> args: ["Error"]
             
-            // Re-join logic for robustness
+            // State machine parser for proper handling of commas in strings
             let rest = parts[1];
-            let mut arg_list = Vec::new();
-            
-            // Naive split by comma for now.
-            // TODO: Better string parsing if needed.
-            for arg_s in rest.split(',') {
-                 arg_list.push(arg_s.trim().to_string());
-            }
-            arg_list
+            parse_args(rest)
         } else {
             Vec::new()
         };
@@ -200,6 +193,59 @@ fn main() {
 
 // --- Helpers ---
 
+/// State machine parser for argument parsing
+/// Handles commas inside quoted strings: `"Hello, World"` -> preserves comma
+/// Supports escape sequences: `\"` inside strings
+fn parse_args(input: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut in_string = false;
+    let mut escape_next = false;
+
+    for c in input.chars() {
+        if escape_next {
+            // Handle escape sequences
+            match c {
+                'n' => current.push('\n'),
+                'r' => current.push('\r'),
+                't' => current.push('\t'),
+                _ => current.push(c), // \", \\, etc.
+            }
+            escape_next = false;
+            continue;
+        }
+
+        match c {
+            '\\' if in_string => {
+                escape_next = true;
+            }
+            '"' => {
+                in_string = !in_string;
+                // Don't add quotes to output - they're delimiters
+            }
+            ',' if !in_string => {
+                // End of argument
+                let trimmed = current.trim().to_string();
+                if !trimmed.is_empty() {
+                    args.push(trimmed);
+                }
+                current.clear();
+            }
+            _ => {
+                current.push(c);
+            }
+        }
+    }
+
+    // Don't forget the last argument
+    let trimmed = current.trim().to_string();
+    if !trimmed.is_empty() {
+        args.push(trimmed);
+    }
+
+    args
+}
+
 fn parse_u8(args: &[String], idx: usize) -> u8 {
     args.get(idx).expect("Missing Argument").parse().expect("Invalid u8")
 }
@@ -222,10 +268,13 @@ fn parse_usize(args: &[String], idx: usize) -> usize {
 }
 
 fn parse_str(args: &[String], idx: usize) -> String {
-    // Rejoin rest of args to support strings with commas if needed?
-    // For now just take the indexed one and strip quotes
-    let s = args.get(idx).expect("Missing Argument");
-    s.replace("\"", "")
+    // Get string argument - quotes already stripped by parse_args
+    // For SETS, rejoin remaining args if there are multiple (handles unquoted strings with commas)
+    if idx < args.len() {
+        args[idx..].join(", ")
+    } else {
+        panic!("Missing string argument at index {}", idx);
+    }
 }
 
 fn resolve_label(target: &str, labels: &HashMap<String, usize>) -> usize {

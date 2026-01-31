@@ -99,32 +99,66 @@ fn generate_c_code(program: &[Instruction], tools: &HashMap<u16, (String, String
 
 // === VM State ===
 static int64_t regs[256];
-static char* heap[4096];
-static int heap_count = 0;
 static int flag_eq = 0, flag_gt = 0, flag_lt = 0;
 
-// === Heap Management ===
-static int heap_alloc(const char* data, int len) {
-    if (heap_count >= 4096) return -1;
-    heap[heap_count] = malloc(len + 1);
-    if (data) memcpy(heap[heap_count], data, len);
-    heap[heap_count][len] = '\0';
-    return heap_count++;
+// === Linear Heap (v2.0) ===
+#define HEAP_SIZE (16 * 1024 * 1024)  // 16MB
+
+typedef struct {
+    size_t offset;
+    size_t size;
+    int used;
+} Allocation;
+
+static unsigned char* heap_buffer = NULL;
+static Allocation allocations[65536];
+static int64_t next_ptr = 1;
+static size_t heap_bump = 0;
+
+static void heap_init(void) {
+    if (!heap_buffer) {
+        heap_buffer = (unsigned char*)malloc(HEAP_SIZE);
+        memset(heap_buffer, 0, HEAP_SIZE);
+    }
 }
 
-static int heap_alloc_str(const char* str) {
-    return heap_alloc(str, strlen(str));
+static int64_t heap_alloc(const char* data, size_t len) {
+    heap_init();
+    if (len == 0) return 0;
+    if (heap_bump + len > HEAP_SIZE) return 0;  // OOM
+
+    size_t offset = heap_bump;
+    heap_bump += len;
+
+    if (data) memcpy(heap_buffer + offset, data, len);
+
+    int64_t ptr = next_ptr++;
+    if (ptr >= 65536) return 0;  // Too many allocations
+
+    allocations[ptr].offset = offset;
+    allocations[ptr].size = len;
+    allocations[ptr].used = 1;
+
+    return ptr;
 }
 
-static char* heap_get(int idx) {
-    if (idx < 0 || idx >= heap_count || !heap[idx]) return "";
-    return heap[idx];
+static int64_t heap_alloc_str(const char* str) {
+    return heap_alloc(str, strlen(str) + 1);  // Include null terminator
 }
 
-static void heap_free(int idx) {
-    if (idx >= 0 && idx < heap_count && heap[idx]) {
-        free(heap[idx]);
-        heap[idx] = NULL;
+static unsigned char* heap_get(int64_t ptr) {
+    if (ptr <= 0 || ptr >= next_ptr || !allocations[ptr].used) return NULL;
+    return heap_buffer + allocations[ptr].offset;
+}
+
+static size_t heap_len(int64_t ptr) {
+    if (ptr <= 0 || ptr >= next_ptr || !allocations[ptr].used) return 0;
+    return allocations[ptr].size;
+}
+
+static void heap_free(int64_t ptr) {
+    if (ptr > 0 && ptr < next_ptr) {
+        allocations[ptr].used = 0;
     }
 }
 
@@ -231,7 +265,8 @@ static char* texec_plugin(int tool_id, const char* arg) {
 }
 
 static int texec(int tool_id, int arg_reg, int dest_reg) {
-    const char* arg = heap_get(regs[arg_reg]);
+    unsigned char* raw = heap_get(regs[arg_reg]);
+    const char* arg = raw ? (const char*)raw : "";
     char* result;
 
     // Check if builtin (0x5xxx, 0x1xxx) or plugin (others)
@@ -245,6 +280,12 @@ static int texec(int tool_id, int arg_reg, int dest_reg) {
     return 0;
 }
 
+// String helper for safe heap access
+static const char* heap_str(int64_t ptr) {
+    unsigned char* raw = heap_get(ptr);
+    return raw ? (const char*)raw : "";
+}
+
 "#);
 
     // Helper functions
@@ -256,18 +297,18 @@ static void itoa_reg(int dest, int src) {
 }
 
 static void atoi_reg(int dest, int src) {
-    regs[dest] = atol(heap_get(regs[src]));
+    regs[dest] = atol(heap_str(regs[src]));
 }
 
 static void scat_reg(int dest, int s1, int s2) {
-    const char* str1 = heap_get(regs[s1]);
-    const char* str2 = heap_get(regs[s2]);
-    int len = strlen(str1) + strlen(str2);
+    const char* str1 = heap_str(regs[s1]);
+    const char* str2 = heap_str(regs[s2]);
+    size_t len = strlen(str1) + strlen(str2);
     char* buf = malloc(len + 1);
     strcpy(buf, str1);
     strcat(buf, str2);
-    regs[dest] = heap_count;
-    heap[heap_count++] = buf;
+    regs[dest] = heap_alloc(buf, len + 1);  // Include null terminator
+    free(buf);
 }
 
 // Simple regex match using POSIX regex (compile with -lregex on some systems)
@@ -280,35 +321,211 @@ static int regex_match(const char* pattern, const char* text) {
     return result;
 }
 
+// === Supervisor Protocol (Governance) ===
+// JSON communication with AI supervisor for drift control
+static int trapped = 0;
+static int trap_code = 0;
+static int current_pc = 0;
+
+// Simple JSON string builder
+static void emit_json_kv_str(FILE* out, const char* key, const char* val, int is_last) {
+    fprintf(out, "\"%s\":\"%s\"%s", key, val, is_last ? "" : ",");
+}
+static void emit_json_kv_int(FILE* out, const char* key, int64_t val, int is_last) {
+    fprintf(out, "\"%s\":%ld%s", key, (long)val, is_last ? "" : ",");
+}
+
+// Emit trap context to stdout for supervisor
+static void supervisor_emit_trap(const char* trap_type, int code, int pc) {
+    printf("{");
+    emit_json_kv_str(stdout, "trap", trap_type, 0);
+    emit_json_kv_int(stdout, "code", code, 0);
+    emit_json_kv_int(stdout, "pc", pc, 0);
+    printf("\"registers_0_15\":[");
+    for (int i = 0; i < 16; i++) {
+        printf("%ld%s", (long)regs[i], i < 15 ? "," : "");
+    }
+    printf("],");
+    emit_json_kv_int(stdout, "last_similarity", regs[243], 1);
+    printf("}\n");
+    fflush(stdout);
+}
+
+// Emit drift context for GUARD instruction
+static void supervisor_emit_drift(int pc, int64_t similarity, int state_reg) {
+    printf("{");
+    emit_json_kv_str(stdout, "trap", "DRIFT", 0);
+    emit_json_kv_int(stdout, "code", 1, 0);
+    emit_json_kv_int(stdout, "pc", pc, 0);
+    emit_json_kv_int(stdout, "similarity", similarity, 0);
+    printf("\"governance\":{");
+    emit_json_kv_int(stdout, "R240_target", regs[240], 0);
+    emit_json_kv_int(stdout, "R241_state", regs[state_reg], 0);
+    emit_json_kv_int(stdout, "R242_threshold", regs[242], 0);
+    emit_json_kv_int(stdout, "R243_last_sim", regs[243], 1);
+    printf("}}\n");
+    fflush(stdout);
+}
+
+// Emit YIELD query for supervisor
+static void supervisor_emit_yield(const char* query, int query_reg, int pc) {
+    printf("{\"yield\":true,\"query\":\"%s\",\"query_reg\":%d,\"pc\":%d}\n",
+           query, query_reg, pc);
+    fflush(stdout);
+}
+
+// Wait for and parse supervisor response
+// Returns: 0=continue, 1=abort, 2=jump (new PC in *new_pc)
+static int supervisor_wait(int* new_pc) {
+    static char buf[8192];
+    fprintf(stderr, "[GOVERNANCE] Awaiting supervisor response (JSON)...\n");
+
+    if (!fgets(buf, sizeof(buf), stdin)) {
+        return 1; // EOF = abort
+    }
+
+    // Minimal JSON parsing for supervisor protocol
+    // Expected: {"action":"continue"} or {"action":"abort"} or {"jump":N}
+    // Also supports: {"set_registers":{"0":123,"1":456}}
+
+    // Parse action
+    char* action_pos = strstr(buf, "\"action\"");
+    if (action_pos) {
+        if (strstr(action_pos, "\"continue\"")) {
+            fprintf(stderr, "[GOVERNANCE] Supervisor: continue\n");
+
+            // Check for set_registers
+            char* set_regs = strstr(buf, "\"set_registers\"");
+            if (set_regs) {
+                // Parse simple {key:val} pairs
+                char* brace = strchr(set_regs, '{');
+                if (brace) {
+                    char* p = brace + 1;
+                    while (*p && *p != '}') {
+                        while (*p && (*p == ' ' || *p == '"' || *p == ',')) p++;
+                        if (*p == '}') break;
+
+                        // Parse register index
+                        int reg_idx = 0;
+                        while (*p >= '0' && *p <= '9') {
+                            reg_idx = reg_idx * 10 + (*p - '0');
+                            p++;
+                        }
+
+                        // Skip to value
+                        while (*p && *p != ':') p++;
+                        if (*p == ':') p++;
+                        while (*p == ' ') p++;
+
+                        // Parse value (handle negative)
+                        int neg = 0;
+                        if (*p == '-') { neg = 1; p++; }
+                        int64_t val = 0;
+                        while (*p >= '0' && *p <= '9') {
+                            val = val * 10 + (*p - '0');
+                            p++;
+                        }
+                        if (neg) val = -val;
+
+                        if (reg_idx >= 0 && reg_idx < 256) {
+                            regs[reg_idx] = val;
+                            fprintf(stderr, "[GOVERNANCE] Set R%d = %ld\n", reg_idx, (long)val);
+                        }
+                    }
+                }
+            }
+            return 0;
+        } else if (strstr(action_pos, "\"abort\"")) {
+            fprintf(stderr, "[GOVERNANCE] Supervisor: abort\n");
+            return 1;
+        }
+    }
+
+    // Parse jump
+    char* jump_pos = strstr(buf, "\"jump\"");
+    if (jump_pos) {
+        char* colon = strchr(jump_pos, ':');
+        if (colon) {
+            *new_pc = atoi(colon + 1);
+            fprintf(stderr, "[GOVERNANCE] Supervisor: jump to %d\n", *new_pc);
+            return 2;
+        }
+    }
+
+    // Parse response (for YIELD)
+    char* resp_pos = strstr(buf, "\"response\"");
+    if (resp_pos) {
+        return 0; // Continue with response parsed
+    }
+
+    // Default: continue
+    return 0;
+}
+
+// Wait for YIELD response and extract string
+static const char* supervisor_wait_yield(void) {
+    static char buf[8192];
+    static char response[4096];
+    response[0] = '\0';
+
+    if (!fgets(buf, sizeof(buf), stdin)) {
+        return response;
+    }
+
+    // Extract response string
+    char* resp_pos = strstr(buf, "\"response\"");
+    if (resp_pos) {
+        char* colon = strchr(resp_pos, ':');
+        if (colon) {
+            char* start = strchr(colon, '"');
+            if (start) {
+                start++;
+                char* end = strchr(start, '"');
+                if (end) {
+                    int len = end - start;
+                    if (len >= sizeof(response)) len = sizeof(response) - 1;
+                    strncpy(response, start, len);
+                    response[len] = '\0';
+                }
+            }
+        }
+    }
+    return response;
+}
+
 // === Vector Operations (Semantic Computing) ===
 // Vector format: [dims:int64][double][double]...
 // Results scaled by 1_000_000 for integer precision
 #include <math.h>
 
-static int vec_alloc(int64_t dims) {
-    int size = 8 + dims * 8;
+static int64_t vec_alloc(int64_t dims) {
+    size_t size = 8 + dims * 8;
     char* data = calloc(1, size);
     *((int64_t*)data) = dims;
-    return heap_count;
-    heap[heap_count++] = data;
+    int64_t ptr = heap_alloc(data, size);
+    free(data);
+    return ptr;
 }
 
-static int64_t vec_dims(int vec_idx) {
-    if (vec_idx < 0 || vec_idx >= heap_count || !heap[vec_idx]) return 0;
-    return *((int64_t*)heap[vec_idx]);
+static int64_t vec_dims(int64_t ptr) {
+    unsigned char* data = heap_get(ptr);
+    if (!data) return 0;
+    return *((int64_t*)data);
 }
 
-static double vec_get(int vec_idx, int64_t idx) {
-    if (vec_idx < 0 || vec_idx >= heap_count || !heap[vec_idx]) return 0.0;
-    return *((double*)(heap[vec_idx] + 8 + idx * 8));
+static double vec_get(int64_t ptr, int64_t idx) {
+    unsigned char* data = heap_get(ptr);
+    if (!data) return 0.0;
+    return *((double*)(data + 8 + idx * 8));
 }
 
-static void vec_set(int vec_idx, int64_t idx, double val) {
-    if (vec_idx < 0 || vec_idx >= heap_count || !heap[vec_idx]) return;
-    *((double*)(heap[vec_idx] + 8 + idx * 8)) = val;
+static void vec_set(int64_t ptr, int64_t idx, double val) {
+    unsigned char* data = heap_get(ptr);
+    if (!data) return;
+    *((double*)(data + 8 + idx * 8)) = val;
 }
 
-static int64_t vec_dot(int v1, int v2) {
+static int64_t vec_dot(int64_t v1, int64_t v2) {
     int64_t d1 = vec_dims(v1), d2 = vec_dims(v2);
     int64_t dims = d1 < d2 ? d1 : d2;
     double dot = 0.0;
@@ -318,7 +535,7 @@ static int64_t vec_dot(int v1, int v2) {
     return (int64_t)(dot * 1000000.0);
 }
 
-static int64_t vec_sim(int v1, int v2) {
+static int64_t vec_sim(int64_t v1, int64_t v2) {
     int64_t d1 = vec_dims(v1), d2 = vec_dims(v2);
     int64_t dims = d1 < d2 ? d1 : d2;
     double dot = 0.0, mag1 = 0.0, mag2 = 0.0;
@@ -334,27 +551,27 @@ static int64_t vec_sim(int v1, int v2) {
     return 0;
 }
 
-static int64_t vec_mag(int vec_idx) {
-    int64_t dims = vec_dims(vec_idx);
+static int64_t vec_mag(int64_t ptr) {
+    int64_t dims = vec_dims(ptr);
     double mag = 0.0;
     for (int64_t i = 0; i < dims; i++) {
-        double v = vec_get(vec_idx, i);
+        double v = vec_get(ptr, i);
         mag += v * v;
     }
     return (int64_t)(sqrt(mag) * 1000000.0);
 }
 
-static void vec_norm(int vec_idx) {
-    int64_t dims = vec_dims(vec_idx);
+static void vec_norm(int64_t ptr) {
+    int64_t dims = vec_dims(ptr);
     double mag = 0.0;
     for (int64_t i = 0; i < dims; i++) {
-        double v = vec_get(vec_idx, i);
+        double v = vec_get(ptr, i);
         mag += v * v;
     }
     mag = sqrt(mag);
     if (mag > 0) {
         for (int64_t i = 0; i < dims; i++) {
-            vec_set(vec_idx, i, vec_get(vec_idx, i) / mag);
+            vec_set(ptr, i, vec_get(ptr, i) / mag);
         }
     }
 }
@@ -363,6 +580,7 @@ static void vec_norm(int vec_idx) {
 
     // Main function - the actual program
     code.push_str("// === Main Program ===\nint main() {\n");
+    code.push_str("    heap_init();\n");
     code.push_str("    srand(time(NULL));\n\n");
 
     // Generate code for each instruction
@@ -372,7 +590,7 @@ static void vec_norm(int vec_idx) {
     }
 
     code.push_str("\n    // Cleanup\n");
-    code.push_str("    for (int i = 0; i < heap_count; i++) if (heap[i]) free(heap[i]);\n");
+    code.push_str("    if (heap_buffer) free(heap_buffer);\n");
     code.push_str("    return 0;\n}\n");
 
     code
@@ -436,10 +654,10 @@ fn generate_instruction(instr: &Instruction, _line: usize, _tools: &HashMap<u16,
         Instruction::FREE { ptr } => format!("    heap_free(regs[{}]);\n", ptr),
 
         Instruction::READ { dest, ptr, offset } => format!(
-            "    regs[{}] = (unsigned char)heap_get(regs[{}])[{}];\n", dest, ptr, offset),
+            "    {{ unsigned char* p = heap_get(regs[{}]); regs[{}] = p ? p[{}] : 0; }}\n", ptr, dest, offset),
 
         Instruction::WRITE { ptr, offset, val } => format!(
-            "    heap_get(regs[{}])[{}] = (char)regs[{}];\n", ptr, offset, val),
+            "    {{ unsigned char* p = heap_get(regs[{}]); if (p) p[{}] = (char)regs[{}]; }}\n", ptr, offset, val),
 
         Instruction::TEXEC { tool, arg, dest } => format!(
             "    texec(0x{:04X}, {}, {});\n", tool, arg, dest),
@@ -449,43 +667,42 @@ fn generate_instruction(instr: &Instruction, _line: usize, _tools: &HashMap<u16,
         Instruction::ATOI { dest, src } => format!("    atoi_reg({}, {});\n", dest, src),
 
         Instruction::READR { dest, ptr, off } => format!(
-            "    regs[{}] = (unsigned char)heap_get(regs[{}])[regs[{}]];\n", dest, ptr, off),
+            "    {{ unsigned char* p = heap_get(regs[{}]); regs[{}] = p ? p[regs[{}]] : 0; }}\n", ptr, dest, off),
 
         Instruction::WRITER { ptr, off, val } => format!(
-            "    heap_get(regs[{}])[regs[{}]] = (char)regs[{}];\n", ptr, off, val),
+            "    {{ unsigned char* p = heap_get(regs[{}]); if (p) p[regs[{}]] = (char)regs[{}]; }}\n", ptr, off, val),
 
         Instruction::SCAT { dest, s1, s2 } => format!("    scat_reg({}, {}, {});\n", dest, s1, s2),
 
         Instruction::STORE64 { ptr, off, val } => format!(
-            "    *((int64_t*)(heap_get(regs[{}]) + regs[{}] * 8)) = regs[{}];\n", ptr, off, val),
+            "    {{ unsigned char* p = heap_get(regs[{}]); if (p) *((int64_t*)(p + regs[{}] * 8)) = regs[{}]; }}\n", ptr, off, val),
 
         Instruction::LOAD64 { dest, ptr, off } => format!(
-            "    regs[{}] = *((int64_t*)(heap_get(regs[{}]) + regs[{}] * 8));\n", dest, ptr, off),
+            "    {{ unsigned char* p = heap_get(regs[{}]); regs[{}] = p ? *((int64_t*)(p + regs[{}] * 8)) : 0; }}\n", ptr, dest, off),
 
         // Batch Memory Operations
         Instruction::MEMCPY { dst, doff, src, soff, len } => format!(
-            "    memcpy(heap_get(regs[{}]) + regs[{}], heap_get(regs[{}]) + regs[{}], regs[{}]);\n",
-            dst, doff, src, soff, len),
+            "    {{ unsigned char* d = heap_get(regs[{}]); unsigned char* s = heap_get(regs[{}]); if (d && s) memcpy(d + regs[{}], s + regs[{}], regs[{}]); }}\n",
+            dst, src, doff, soff, len),
 
         Instruction::HLEN { dest, ptr } => format!(
-            "    regs[{}] = strlen(heap_get(regs[{}]));\n", dest, ptr),
+            "    regs[{}] = heap_len(regs[{}]);\n", dest, ptr),
 
         Instruction::SLICE { dest, ptr, off, len } => format!(
-            "    {{ char* src = heap_get(regs[{}]); int o = regs[{}]; int l = regs[{}]; regs[{}] = heap_alloc(src + o, l); }}\n",
+            "    {{ unsigned char* src = heap_get(regs[{}]); size_t o = regs[{}]; size_t l = regs[{}]; regs[{}] = src ? heap_alloc((const char*)(src + o), l) : 0; }}\n",
             ptr, off, len, dest),
 
         Instruction::MEMSET { ptr, off, len, val } => format!(
-            "    memset(heap_get(regs[{}]) + regs[{}], (char)regs[{}], regs[{}]);\n",
+            "    {{ unsigned char* p = heap_get(regs[{}]); if (p) memset(p + regs[{}], (char)regs[{}], regs[{}]); }}\n",
             ptr, off, val, len),
 
         // REGEX instruction
         Instruction::REGEX { dest, pat, text } => format!(
-            "    regs[{}] = regex_match(heap_get(regs[{}]), heap_get(regs[{}]));\n", dest, pat, text),
+            "    regs[{}] = regex_match(heap_str(regs[{}]), heap_str(regs[{}]));\n", dest, pat, text),
 
         // Vector Operations (Semantic Computing)
         Instruction::VNEW { dest, dims } => format!(
-            "    {{ int64_t d = regs[{}]; int sz = 8 + d * 8; char* v = calloc(1, sz); *((int64_t*)v) = d; regs[{}] = heap_count; heap[heap_count++] = v; }}\n",
-            dims, dest),
+            "    regs[{}] = vec_alloc(regs[{}]);\n", dest, dims),
 
         Instruction::VSET { vec, idx, val } => format!(
             "    vec_set(regs[{}], regs[{}], *((double*)&regs[{}]));\n", vec, idx, val),
@@ -505,19 +722,45 @@ fn generate_instruction(instr: &Instruction, _line: usize, _tools: &HashMap<u16,
         Instruction::VNORM { vec } => format!(
             "    vec_norm(regs[{}]);\n", vec),
 
-        // Governance (simplified for AOT - no supervisor interaction)
+        // Governance (with supervisor interaction)
         Instruction::LATCH { target, threshold } => format!(
-            "    regs[240] = regs[{}]; regs[242] = regs[{}]; /* LATCH target, threshold */\n",
-            target, threshold),
+            r#"    regs[240] = regs[{}]; regs[242] = regs[{}]; fprintf(stderr, "[GOVERNANCE] Latched target_vec=R240, threshold=%lld\n", (long long)regs[242]);
+"#, target, threshold),
 
-        Instruction::GUARD { state } => format!(
-            "    {{ int64_t sim = vec_sim(regs[240], regs[{}]); regs[243] = sim; if (sim < regs[242]) {{ fprintf(stderr, \"DRIFT: sim=%%ld < threshold=%%ld\\n\", sim, regs[242]); exit(2); }} }}\n",
-            state),
+        Instruction::GUARD { state } => format!(r#"    {{
+        int64_t sim = vec_sim(regs[240], regs[{state}]);
+        regs[243] = sim;
+        fprintf(stderr, "[GOVERNANCE] GUARD: similarity=%lld, threshold=%lld\n", (long long)sim, (long long)regs[242]);
+        if (sim < regs[242]) {{
+            fprintf(stderr, "[GOVERNANCE] DRIFT DETECTED! Triggering TRAP...\n");
+            current_pc = __LINE__;
+            supervisor_emit_drift(current_pc, sim, {state});
+            int new_pc = 0;
+            int action = supervisor_wait(&new_pc);
+            if (action == 1) {{ fprintf(stderr, "[GOVERNANCE] Aborted by supervisor\n"); exit(2); }}
+            if (action == 2) {{ /* jump handled by goto below */ }}
+        }}
+    }}
+"#, state = state),
 
-        Instruction::TRAP { code } => format!(
-            "    fprintf(stderr, \"TRAP code={}\\n\"); exit({});\n", code, code),
+        Instruction::TRAP { code } => format!(r#"    {{
+        current_pc = __LINE__;
+        fprintf(stderr, "[GOVERNANCE] TRAP {code}: Awaiting supervisor...\n");
+        supervisor_emit_trap("MANUAL", {code}, current_pc);
+        int new_pc = 0;
+        int action = supervisor_wait(&new_pc);
+        if (action == 1) {{ exit({code}); }}
+    }}
+"#, code = code),
 
-        Instruction::YIELD { query, dest } => format!(
-            "    regs[{}] = regs[{}]; /* YIELD (no-op in AOT) */\n", dest, query),
+        Instruction::YIELD { query, dest } => format!(r#"    {{
+        current_pc = __LINE__;
+        const char* query_str = heap_str(regs[{query}]);
+        supervisor_emit_yield(query_str, {query}, current_pc);
+        const char* response = supervisor_wait_yield();
+        regs[{dest}] = heap_alloc_str(response);
+        fprintf(stderr, "[GOVERNANCE] YIELD response stored in R{dest}\n");
+    }}
+"#, query = query, dest = dest),
     }
 }

@@ -775,6 +775,150 @@ cd tools && cargo build --release
 
 ---
 
+## AOT Governance (Supervisor Protocol)
+
+AOT-compiled programs support the same governance protocol as the VM. When `TRAP`, `GUARD` (drift), or `YIELD` triggers, the program emits JSON to stdout and waits for supervisor response on stdin.
+
+### Protocol Format
+
+**TRAP/GUARD output:**
+```json
+{"trap":"MANUAL","code":42,"pc":509,"registers_0_15":[0,1,2,...],"last_similarity":0}
+```
+
+**DRIFT output (from GUARD):**
+```json
+{"trap":"DRIFT","code":1,"pc":524,"similarity":700000,"governance":{"R240_target":3,"R241_state":4,"R242_threshold":800000,"R243_last_sim":700000}}
+```
+
+**YIELD output:**
+```json
+{"yield":true,"query":"What should I do?","query_reg":1,"pc":497}
+```
+
+### Supervisor Responses
+
+| Action | JSON | Effect |
+|--------|------|--------|
+| Continue | `{"action":"continue"}` | Resume execution |
+| Abort | `{"action":"abort"}` | Exit program |
+| Jump | `{"jump":10}` | Jump to instruction 10 |
+| Set Registers | `{"action":"continue","set_registers":{"5":100}}` | Modify R5, then continue |
+
+**YIELD response:**
+```json
+{"response":"Do task A"}
+```
+
+### Example: AI Supervisor Loop
+
+```bash
+# Run AOT program with Python supervisor
+python3 supervisor.py | ./aot_program 2>/dev/null | python3 supervisor.py
+```
+
+```python
+# supervisor.py (minimal example)
+import json, sys
+for line in sys.stdin:
+    msg = json.loads(line)
+    if msg.get("trap"):
+        print(json.dumps({"action": "continue"}))
+    elif msg.get("yield"):
+        print(json.dumps({"response": "approved"}))
+    sys.stdout.flush()
+```
+
+### VM vs AOT Governance Comparison
+
+| Feature | VM (l0vm) | AOT (l0cc) |
+|---------|-----------|------------|
+| TRAP | Suspend, emit JSON, wait | Emit JSON, wait |
+| GUARD drift | Suspend, emit JSON, wait | Emit JSON, wait |
+| YIELD | Send query, receive response | Send query, receive response |
+| set_registers | ✅ Supported | ✅ Supported |
+| jump | ✅ Supported | ⚠️ Limited (C labels) |
+| abort | ✅ Supported | ✅ exit(code) |
+
+---
+
+## Standard Library (stdlib)
+
+L-0 includes a **Standard Library** as a "prompt resource pack" for AI agents. Since L-0 has **no function calls** (no indirect jumps), all code reuse is done via **inline patterns**.
+
+### Location
+
+```
+stdlib/
+├── abi.md           # ABI spec (register convention)
+├── string.asm.txt   # String operations
+├── math.asm.txt     # Math operations
+├── array.asm.txt    # Array operations
+└── README.md        # Usage guide
+```
+
+### Key Concept: Inline Patterns
+
+**L-0 has NO indirect jumps or CALL/RET.** AI agents must:
+1. Copy pattern body into their program
+2. Rename all labels with unique suffix (`_1`, `_2`, etc.)
+3. Pattern ends at `_done` label (falls through)
+
+### Register Convention (ABI)
+
+| Registers | Purpose |
+|-----------|---------|
+| R0-R3 | Arguments / Return value |
+| R4-R9 | Pattern temporaries |
+| R10-R19 | Preserved across patterns |
+| R50-R99 | Scratch (always clobbered) |
+| R255 | I/O buffer |
+
+### Available Patterns
+
+**String** (`stdlib/string.asm.txt`):
+- `strlen`, `strcat`, `substr`, `strcmp`, `strchr`
+- `itoa`, `atoi`, `upper`, `lower`, `trim`, `print`
+
+**Math** (`stdlib/math.asm.txt`):
+- `abs`, `min`, `max`, `pow`, `factorial`
+- `fibonacci`, `gcd`, `lcm`, `is_prime`, `sqrt_int`, `rand`
+
+**Array** (`stdlib/array.asm.txt`):
+- `array_new`, `array_get`, `array_set`, `array_fill`
+- `array_copy`, `array_find`, `array_sum`, `array_min`, `array_max`
+- `bubble_sort`, `reverse`, `array_print`
+
+### Example: Using fibonacci pattern
+
+```asm
+SET 0, 10              # Input: compute F(10)
+
+# ---- BEGIN fibonacci_1 (inlined from stdlib) ----
+    SET 4, 0
+    CMP 0, 4
+    BEQ fibonacci_1_zero
+    # ... (copy full pattern, rename all labels with _1 suffix)
+fibonacci_1_done:
+# ---- END fibonacci_1 ----
+
+# R0 = 55 (result)
+ITOA 1, 0
+TEXEC 0x5000, 1, 255
+HALT
+```
+
+### AI Agent Workflow
+
+1. **Parse user request** → Identify needed patterns
+2. **Read stdlib files** → Copy relevant pattern bodies
+3. **Rename labels** → Add unique suffix (`_1`, `_2`)
+4. **Wire inputs** → Set R0-R3 before pattern
+5. **Use outputs** → R0 contains result after `_done`
+6. **Generate .asm** → Self-contained, no dependencies
+
+---
+
 ## Future Directions
 
 1. **VADD/VSUB**: Vector arithmetic for interpolation

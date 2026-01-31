@@ -91,7 +91,7 @@ The language is defined by the `Instruction` enum in `src/lib.rs`:
 |--------|-------------|
 | `l0vm` | Virtual Machine - executes .json or .l0 programs |
 | `l0asm`| Assembler - compiles .asm to .l0 bytecode |
-| `l0cc` | AOT Compiler - compiles .l0/.json to C code |
+| `l0cc` | AOT Compiler - compiles .l0/.json to C code (with supervisor protocol) |
 
 ```
 +-----------+   l0asm   +-----------+   l0vm    +-----------+
@@ -254,9 +254,11 @@ GUARD 2                # check state; TRAP if drift detected
 ```
 
 When drift is detected, GUARD triggers TRAP which:
-1. Suspends VM execution
-2. Emits JSON context to supervisor
-3. Waits for correction instruction
+1. Suspends execution (VM or AOT)
+2. Emits JSON context to stdout: `{"trap":"DRIFT","code":1,"pc":N,...}`
+3. Waits for supervisor response on stdin: `{"action":"continue"}`
+
+Both VM and AOT-compiled binaries support the same supervisor protocol for governance.
 
 ---
 

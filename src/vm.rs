@@ -80,6 +80,146 @@ impl ToolRegistry {
     }
 }
 
+// === Linear Heap ===
+// v2.0: Linear memory model with proper pointer arithmetic support
+
+const HEAP_SIZE: usize = 16 * 1024 * 1024; // 16MB default heap
+
+#[derive(Clone)]
+struct Allocation {
+    offset: usize,  // Start offset in buffer
+    size: usize,    // Allocated size
+    used: bool,     // Is this allocation active?
+}
+
+struct LinearHeap {
+    buffer: Vec<u8>,                      // Linear memory buffer
+    allocations: HashMap<i64, Allocation>, // ptr_id -> allocation info
+    next_ptr: i64,                         // Next pointer ID
+    bump: usize,                           // Bump pointer for fast allocation
+    free_list: Vec<(usize, usize)>,       // (offset, size) of freed regions
+}
+
+impl LinearHeap {
+    fn new() -> Self {
+        LinearHeap {
+            buffer: vec![0u8; HEAP_SIZE],
+            allocations: HashMap::new(),
+            next_ptr: 1,  // Start from 1 (0 reserved for null)
+            bump: 0,
+            free_list: Vec::new(),
+        }
+    }
+
+    /// Allocate memory and return pointer ID
+    fn alloc(&mut self, data: Vec<u8>) -> i64 {
+        let size = data.len();
+        if size == 0 {
+            return 0; // Null for empty allocation
+        }
+
+        // Try to reuse from free list (first-fit)
+        let offset = if let Some(idx) = self.free_list.iter().position(|(_, s)| *s >= size) {
+            let (off, free_size) = self.free_list.remove(idx);
+            // If leftover space, put back in free list
+            if free_size > size + 16 { // Min 16 bytes to avoid fragmentation
+                self.free_list.push((off + size, free_size - size));
+            }
+            off
+        } else {
+            // Bump allocate
+            if self.bump + size > self.buffer.len() {
+                // Grow buffer
+                let new_size = (self.bump + size).max(self.buffer.len() * 2);
+                self.buffer.resize(new_size, 0);
+            }
+            let off = self.bump;
+            self.bump += size;
+            off
+        };
+
+        // Copy data to buffer
+        self.buffer[offset..offset + size].copy_from_slice(&data);
+
+        // Record allocation
+        let ptr = self.next_ptr;
+        self.next_ptr += 1;
+        self.allocations.insert(ptr, Allocation { offset, size, used: true });
+
+        ptr
+    }
+
+    /// Free an allocation
+    fn free(&mut self, ptr: i64) {
+        if let Some(alloc) = self.allocations.get_mut(&ptr) {
+            if alloc.used {
+                alloc.used = false;
+                self.free_list.push((alloc.offset, alloc.size));
+                // TODO: Coalesce adjacent free regions
+            }
+        }
+    }
+
+    /// Get immutable slice for pointer
+    fn get(&self, ptr: i64) -> Option<&[u8]> {
+        self.allocations.get(&ptr).and_then(|a| {
+            if a.used {
+                Some(&self.buffer[a.offset..a.offset + a.size])
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Get mutable slice for pointer
+    fn get_mut(&mut self, ptr: i64) -> Option<&mut [u8]> {
+        if let Some(alloc) = self.allocations.get(&ptr) {
+            if alloc.used {
+                let offset = alloc.offset;
+                let size = alloc.size;
+                return Some(&mut self.buffer[offset..offset + size]);
+            }
+        }
+        None
+    }
+
+    /// Get allocation length
+    fn len(&self, ptr: i64) -> Option<usize> {
+        self.allocations.get(&ptr).and_then(|a| {
+            if a.used { Some(a.size) } else { None }
+        })
+    }
+
+    /// Read byte at offset (supports pointer arithmetic)
+    fn read_byte(&self, ptr: i64, offset: usize) -> Option<u8> {
+        self.allocations.get(&ptr).and_then(|a| {
+            if a.used && offset < a.size {
+                Some(self.buffer[a.offset + offset])
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Write byte at offset
+    fn write_byte(&mut self, ptr: i64, offset: usize, val: u8) -> bool {
+        if let Some(alloc) = self.allocations.get(&ptr) {
+            if alloc.used && offset < alloc.size {
+                self.buffer[alloc.offset + offset] = val;
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Get raw offset for cross-allocation operations
+    fn get_raw_offset(&self, ptr: i64) -> Option<usize> {
+        self.allocations.get(&ptr).and_then(|a| {
+            if a.used { Some(a.offset) } else { None }
+        })
+    }
+}
+
 // === VM ===
 
 struct VM {
@@ -87,8 +227,8 @@ struct VM {
     // Reserved: R240=target_vec, R241=state_vec, R242=threshold, R243=last_sim
     registers: [i64; 256],
 
-    // Heap Memory: Index -> Byte Vector
-    heap: Vec<Option<Vec<u8>>>,
+    // Linear Heap Memory (v2.0)
+    heap: LinearHeap,
 
     // Flags
     flag_eq: bool,
@@ -111,10 +251,10 @@ impl VM {
     fn new() -> Self {
         let mut registry = ToolRegistry::new();
         registry.load();
-        
+
         VM {
             registers: [0; 256],
-            heap: Vec::new(),
+            heap: LinearHeap::new(),
             flag_eq: false,
             flag_gt: false,
             flag_lt: false,
@@ -126,15 +266,9 @@ impl VM {
         }
     }
 
-    // Helper: Allocate on heap
+    // Helper: Allocate on linear heap
     fn heap_alloc(&mut self, data: Vec<u8>) -> i64 {
-        if let Some(pos) = self.heap.iter().position(|x| x.is_none()) {
-            self.heap[pos] = Some(data);
-            return pos as i64;
-        }
-        let idx = self.heap.len();
-        self.heap.push(Some(data));
-        idx as i64
+        self.heap.alloc(data)
     }
     
     // Execute External Plugin
@@ -211,10 +345,8 @@ impl VM {
                 // ... (Previous Instructions match logic is same) ...
                 
                 Instruction::TEXEC { tool, arg, dest } => {
-                    let arg_ptr = self.registers[*arg as usize] as usize;
-                    let arg_str = if let Some(Some(d)) = self.heap.get(arg_ptr) {
-                         String::from_utf8_lossy(d).to_string()
-                    } else { "".to_string() };
+                    let arg_ptr = self.registers[*arg as usize];
+                    let arg_str = self.heap.get(arg_ptr).map(|d| String::from_utf8_lossy(d).to_string()).unwrap_or_default();
                     
                     let tool_name = if let Some(plugin) = self.registry.get(*tool) {
                         plugin.name.as_str()
@@ -369,16 +501,19 @@ impl VM {
                     println!("--- VM DUMP ---");
                     println!("Regs[0-15]: {:?}", &self.registers[0..16]);
                     println!("Regs[10-25]: {:?}", &self.registers[10..26]);
-                    println!("Heap ({} slots):", self.heap.len());
-                    for (i, slot) in self.heap.iter().enumerate() {
-                        if let Some(data) = slot {
+                    println!("Linear Heap: {} allocations, {} bytes used",
+                             self.heap.allocations.len(), self.heap.bump);
+                    for (ptr, alloc) in &self.heap.allocations {
+                        if alloc.used {
+                            let data = &self.heap.buffer[alloc.offset..alloc.offset + alloc.size];
                             let preview = String::from_utf8_lossy(data);
                             let truncated = if preview.len() > 40 {
                                 format!("{}...", &preview[..40])
                             } else {
                                 preview.to_string()
                             };
-                            println!("  [{}]: \"{}\" ({} bytes)", i, truncated, data.len());
+                            println!("  [ptr={}]: \"{}\" ({} bytes @ offset {})",
+                                     ptr, truncated, alloc.size, alloc.offset);
                         }
                     }
                 },
@@ -430,29 +565,25 @@ impl VM {
                      self.registers[*dest as usize] = ptr;
                 },
                 Instruction::FREE { ptr } => {
-                    let idx = self.registers[*ptr as usize] as usize;
-                    if idx < self.heap.len() { self.heap[idx] = None; }
+                    let p = self.registers[*ptr as usize];
+                    self.heap.free(p);
                 },
                 Instruction::READ { dest, ptr, offset } => {
-                    let hp = self.registers[*ptr as usize] as usize;
-                     if let Some(Some(data)) = self.heap.get(hp) {
-                        if *offset < data.len() { self.registers[*dest as usize] = data[*offset] as i64; }
-                     }
+                    let p = self.registers[*ptr as usize];
+                    if let Some(v) = self.heap.read_byte(p, *offset) {
+                        self.registers[*dest as usize] = v as i64;
+                    }
                 },
                 Instruction::WRITE { ptr, offset, val } => {
-                     let hp = self.registers[*ptr as usize] as usize;
-                     let v = self.registers[*val as usize] as u8;
-                     if hp < self.heap.len() {
-                         if let Some(data) = &mut self.heap[hp] {
-                             if *offset < data.len() { data[*offset] = v; }
-                         }
-                     }
+                    let p = self.registers[*ptr as usize];
+                    let v = self.registers[*val as usize] as u8;
+                    self.heap.write_byte(p, *offset, v);
                 },
                 Instruction::REGEX { dest, pat, text } => {
-                    let pat_ptr = self.registers[*pat as usize] as usize;
-                    let txt_ptr = self.registers[*text as usize] as usize;
-                    let pat_str = if let Some(Some(d)) = self.heap.get(pat_ptr) { String::from_utf8_lossy(d).to_string() } else { "".to_string() };
-                    let txt_str = if let Some(Some(d)) = self.heap.get(txt_ptr) { String::from_utf8_lossy(d).to_string() } else { "".to_string() };
+                    let pat_ptr = self.registers[*pat as usize];
+                    let txt_ptr = self.registers[*text as usize];
+                    let pat_str = self.heap.get(pat_ptr).map(|d| String::from_utf8_lossy(d).to_string()).unwrap_or_default();
+                    let txt_str = self.heap.get(txt_ptr).map(|d| String::from_utf8_lossy(d).to_string()).unwrap_or_default();
                     match regex::Regex::new(&pat_str) {
                          Ok(re) => { self.registers[*dest as usize] = if re.is_match(&txt_str) { 1 } else { 0 }; },
                          Err(_) => { self.registers[*dest as usize] = 0; }
@@ -465,61 +596,47 @@ impl VM {
                     self.registers[*dest as usize] = ptr;
                 },
                 Instruction::ATOI { dest, src } => {
-                    let str_ptr = self.registers[*src as usize] as usize;
-                    let s = if let Some(Some(d)) = self.heap.get(str_ptr) {
-                        String::from_utf8_lossy(d).to_string()
-                    } else { "0".to_string() };
+                    let str_ptr = self.registers[*src as usize];
+                    let s = self.heap.get(str_ptr).map(|d| String::from_utf8_lossy(d).to_string()).unwrap_or_else(|| "0".to_string());
                     self.registers[*dest as usize] = s.trim().parse::<i64>().unwrap_or(0);
                 },
                 Instruction::READR { dest, ptr, off } => {
-                    let hp = self.registers[*ptr as usize] as usize;
+                    let p = self.registers[*ptr as usize];
                     let offset = self.registers[*off as usize] as usize;
-                    if let Some(Some(data)) = self.heap.get(hp) {
-                        if offset < data.len() {
-                            self.registers[*dest as usize] = data[offset] as i64;
-                        }
+                    if let Some(v) = self.heap.read_byte(p, offset) {
+                        self.registers[*dest as usize] = v as i64;
                     }
                 },
                 Instruction::WRITER { ptr, off, val } => {
-                    let hp = self.registers[*ptr as usize] as usize;
+                    let p = self.registers[*ptr as usize];
                     let offset = self.registers[*off as usize] as usize;
                     let v = self.registers[*val as usize] as u8;
-                    if hp < self.heap.len() {
-                        if let Some(data) = &mut self.heap[hp] {
-                            if offset < data.len() { data[offset] = v; }
-                        }
-                    }
+                    self.heap.write_byte(p, offset, v);
                 },
                 Instruction::SCAT { dest, s1, s2 } => {
-                    let ptr1 = self.registers[*s1 as usize] as usize;
-                    let ptr2 = self.registers[*s2 as usize] as usize;
-                    let str1 = if let Some(Some(d)) = self.heap.get(ptr1) {
-                        String::from_utf8_lossy(d).to_string()
-                    } else { "".to_string() };
-                    let str2 = if let Some(Some(d)) = self.heap.get(ptr2) {
-                        String::from_utf8_lossy(d).to_string()
-                    } else { "".to_string() };
+                    let ptr1 = self.registers[*s1 as usize];
+                    let ptr2 = self.registers[*s2 as usize];
+                    let str1 = self.heap.get(ptr1).map(|d| String::from_utf8_lossy(d).to_string()).unwrap_or_default();
+                    let str2 = self.heap.get(ptr2).map(|d| String::from_utf8_lossy(d).to_string()).unwrap_or_default();
                     let result = format!("{}{}", str1, str2);
                     let ptr = self.heap_alloc(result.as_bytes().to_vec());
                     self.registers[*dest as usize] = ptr;
                 },
                 Instruction::STORE64 { ptr, off, val } => {
-                    let hp = self.registers[*ptr as usize] as usize;
+                    let p = self.registers[*ptr as usize];
                     let offset = (self.registers[*off as usize] as usize) * 8;
                     let v = self.registers[*val as usize];
                     let bytes = v.to_le_bytes();
-                    if hp < self.heap.len() {
-                        if let Some(data) = &mut self.heap[hp] {
-                            if offset + 8 <= data.len() {
-                                data[offset..offset+8].copy_from_slice(&bytes);
-                            }
+                    if let Some(data) = self.heap.get_mut(p) {
+                        if offset + 8 <= data.len() {
+                            data[offset..offset+8].copy_from_slice(&bytes);
                         }
                     }
                 },
                 Instruction::LOAD64 { dest, ptr, off } => {
-                    let hp = self.registers[*ptr as usize] as usize;
+                    let p = self.registers[*ptr as usize];
                     let offset = (self.registers[*off as usize] as usize) * 8;
-                    if let Some(Some(data)) = self.heap.get(hp) {
+                    if let Some(data) = self.heap.get(p) {
                         if offset + 8 <= data.len() {
                             let bytes: [u8; 8] = data[offset..offset+8].try_into().unwrap_or([0u8; 8]);
                             self.registers[*dest as usize] = i64::from_le_bytes(bytes);
@@ -528,22 +645,22 @@ impl VM {
                 },
                 // === Batch Memory Operations ===
                 Instruction::MEMCPY { dst, doff, src, soff, len } => {
-                    let src_hp = self.registers[*src as usize] as usize;
+                    let src_ptr = self.registers[*src as usize];
                     let src_off = self.registers[*soff as usize] as usize;
-                    let dst_hp = self.registers[*dst as usize] as usize;
+                    let dst_ptr = self.registers[*dst as usize];
                     let dst_off = self.registers[*doff as usize] as usize;
                     let length = self.registers[*len as usize] as usize;
 
                     // Read source bytes
-                    let bytes: Vec<u8> = if let Some(Some(data)) = self.heap.get(src_hp) {
+                    let bytes: Vec<u8> = if let Some(data) = self.heap.get(src_ptr) {
                         if src_off + length <= data.len() {
                             data[src_off..src_off + length].to_vec()
                         } else { vec![] }
                     } else { vec![] };
 
                     // Write to destination
-                    if !bytes.is_empty() && dst_hp < self.heap.len() {
-                        if let Some(data) = &mut self.heap[dst_hp] {
+                    if !bytes.is_empty() {
+                        if let Some(data) = self.heap.get_mut(dst_ptr) {
                             if dst_off + length <= data.len() {
                                 data[dst_off..dst_off + length].copy_from_slice(&bytes);
                             }
@@ -551,18 +668,16 @@ impl VM {
                     }
                 },
                 Instruction::HLEN { dest, ptr } => {
-                    let hp = self.registers[*ptr as usize] as usize;
-                    let len = if let Some(Some(data)) = self.heap.get(hp) {
-                        data.len() as i64
-                    } else { 0 };
+                    let p = self.registers[*ptr as usize];
+                    let len = self.heap.len(p).unwrap_or(0) as i64;
                     self.registers[*dest as usize] = len;
                 },
                 Instruction::SLICE { dest, ptr, off, len } => {
-                    let hp = self.registers[*ptr as usize] as usize;
+                    let p = self.registers[*ptr as usize];
                     let offset = self.registers[*off as usize] as usize;
                     let length = self.registers[*len as usize] as usize;
 
-                    let slice: Vec<u8> = if let Some(Some(data)) = self.heap.get(hp) {
+                    let slice: Vec<u8> = if let Some(data) = self.heap.get(p) {
                         if offset + length <= data.len() {
                             data[offset..offset + length].to_vec()
                         } else if offset < data.len() {
@@ -570,21 +685,19 @@ impl VM {
                         } else { vec![] }
                     } else { vec![] };
 
-                    let ptr = self.heap_alloc(slice);
-                    self.registers[*dest as usize] = ptr;
+                    let new_ptr = self.heap_alloc(slice);
+                    self.registers[*dest as usize] = new_ptr;
                 },
                 Instruction::MEMSET { ptr, off, len, val } => {
-                    let hp = self.registers[*ptr as usize] as usize;
+                    let p = self.registers[*ptr as usize];
                     let offset = self.registers[*off as usize] as usize;
                     let length = self.registers[*len as usize] as usize;
                     let value = self.registers[*val as usize] as u8;
 
-                    if hp < self.heap.len() {
-                        if let Some(data) = &mut self.heap[hp] {
-                            let end = std::cmp::min(offset + length, data.len());
-                            for i in offset..end {
-                                data[i] = value;
-                            }
+                    if let Some(data) = self.heap.get_mut(p) {
+                        let end = std::cmp::min(offset + length, data.len());
+                        for i in offset..end {
+                            data[i] = value;
                         }
                     }
                 },
@@ -605,25 +718,23 @@ impl VM {
                 },
 
                 Instruction::VSET { vec, idx, val } => {
-                    let hp = self.registers[*vec as usize] as usize;
+                    let p = self.registers[*vec as usize];
                     let index = self.registers[*idx as usize] as usize;
                     let value_bits = self.registers[*val as usize] as u64;
 
-                    if hp < self.heap.len() {
-                        if let Some(data) = &mut self.heap[hp] {
-                            let offset = 8 + index * 8; // Skip dimension header
-                            if offset + 8 <= data.len() {
-                                data[offset..offset+8].copy_from_slice(&value_bits.to_le_bytes());
-                            }
+                    if let Some(data) = self.heap.get_mut(p) {
+                        let offset = 8 + index * 8; // Skip dimension header
+                        if offset + 8 <= data.len() {
+                            data[offset..offset+8].copy_from_slice(&value_bits.to_le_bytes());
                         }
                     }
                 },
 
                 Instruction::VGET { dest, vec, idx } => {
-                    let hp = self.registers[*vec as usize] as usize;
+                    let p = self.registers[*vec as usize];
                     let index = self.registers[*idx as usize] as usize;
 
-                    if let Some(Some(data)) = self.heap.get(hp) {
+                    if let Some(data) = self.heap.get(p) {
                         let offset = 8 + index * 8;
                         if offset + 8 <= data.len() {
                             let bytes: [u8; 8] = data[offset..offset+8].try_into().unwrap_or([0u8; 8]);
@@ -633,12 +744,12 @@ impl VM {
                 },
 
                 Instruction::VDOT { dest, v1, v2 } => {
-                    let hp1 = self.registers[*v1 as usize] as usize;
-                    let hp2 = self.registers[*v2 as usize] as usize;
+                    let p1 = self.registers[*v1 as usize];
+                    let p2 = self.registers[*v2 as usize];
 
                     let mut dot = 0.0f64;
 
-                    if let (Some(Some(d1)), Some(Some(d2))) = (self.heap.get(hp1), self.heap.get(hp2)) {
+                    if let (Some(d1), Some(d2)) = (self.heap.get(p1), self.heap.get(p2)) {
                         let dims1 = i64::from_le_bytes(d1[0..8].try_into().unwrap_or([0u8; 8])) as usize;
                         let dims2 = i64::from_le_bytes(d2[0..8].try_into().unwrap_or([0u8; 8])) as usize;
                         let dims = std::cmp::min(dims1, dims2);
@@ -657,14 +768,14 @@ impl VM {
 
                 Instruction::VSIM { dest, v1, v2 } => {
                     // Cosine similarity = dot(v1,v2) / (|v1| * |v2|)
-                    let hp1 = self.registers[*v1 as usize] as usize;
-                    let hp2 = self.registers[*v2 as usize] as usize;
+                    let p1 = self.registers[*v1 as usize];
+                    let p2 = self.registers[*v2 as usize];
 
                     let mut dot = 0.0f64;
                     let mut mag1 = 0.0f64;
                     let mut mag2 = 0.0f64;
 
-                    if let (Some(Some(d1)), Some(Some(d2))) = (self.heap.get(hp1), self.heap.get(hp2)) {
+                    if let (Some(d1), Some(d2)) = (self.heap.get(p1), self.heap.get(p2)) {
                         let dims1 = i64::from_le_bytes(d1[0..8].try_into().unwrap_or([0u8; 8])) as usize;
                         let dims2 = i64::from_le_bytes(d2[0..8].try_into().unwrap_or([0u8; 8])) as usize;
                         let dims = std::cmp::min(dims1, dims2);
@@ -688,10 +799,10 @@ impl VM {
                 },
 
                 Instruction::VMAG { dest, vec } => {
-                    let hp = self.registers[*vec as usize] as usize;
+                    let p = self.registers[*vec as usize];
                     let mut mag = 0.0f64;
 
-                    if let Some(Some(data)) = self.heap.get(hp) {
+                    if let Some(data) = self.heap.get(p) {
                         let dims = i64::from_le_bytes(data[0..8].try_into().unwrap_or([0u8; 8])) as usize;
 
                         for i in 0..dims {
@@ -707,11 +818,11 @@ impl VM {
                 },
 
                 Instruction::VNORM { vec } => {
-                    let hp = self.registers[*vec as usize] as usize;
+                    let p = self.registers[*vec as usize];
 
                     // First calculate magnitude
                     let mut mag = 0.0f64;
-                    let dims = if let Some(Some(data)) = self.heap.get(hp) {
+                    let dims = if let Some(data) = self.heap.get(p) {
                         let d = i64::from_le_bytes(data[0..8].try_into().unwrap_or([0u8; 8])) as usize;
                         for i in 0..d {
                             let off = 8 + i * 8;
@@ -726,8 +837,8 @@ impl VM {
                     mag = mag.sqrt();
 
                     // Normalize in-place
-                    if mag > 0.0 && hp < self.heap.len() {
-                        if let Some(data) = &mut self.heap[hp] {
+                    if mag > 0.0 {
+                        if let Some(data) = self.heap.get_mut(p) {
                             for i in 0..dims {
                                 let off = 8 + i * 8;
                                 if off + 8 <= data.len() {
@@ -753,14 +864,14 @@ impl VM {
                 Instruction::GUARD { state } => {
                     // Compute VSIM between R240 (target) and R[state]
                     // If similarity < R242 (threshold), trigger TRAP
-                    let hp1 = self.registers[240] as usize;  // target vector
-                    let hp2 = self.registers[*state as usize] as usize;  // current state vector
+                    let p1 = self.registers[240];  // target vector
+                    let p2 = self.registers[*state as usize];  // current state vector
 
                     let mut dot = 0.0f64;
                     let mut mag1 = 0.0f64;
                     let mut mag2 = 0.0f64;
 
-                    if let (Some(Some(d1)), Some(Some(d2))) = (self.heap.get(hp1), self.heap.get(hp2)) {
+                    if let (Some(d1), Some(d2)) = (self.heap.get(p1), self.heap.get(p2)) {
                         let dims1 = i64::from_le_bytes(d1[0..8].try_into().unwrap_or([0u8; 8])) as usize;
                         let dims2 = i64::from_le_bytes(d2[0..8].try_into().unwrap_or([0u8; 8])) as usize;
                         let dims = std::cmp::min(dims1, dims2);
@@ -869,10 +980,8 @@ impl VM {
 
                 Instruction::YIELD { query, dest } => {
                     // Yield to supervisor with a query, receive response
-                    let query_ptr = self.registers[*query as usize] as usize;
-                    let query_str = if let Some(Some(d)) = self.heap.get(query_ptr) {
-                        String::from_utf8_lossy(d).to_string()
-                    } else { "".to_string() };
+                    let query_ptr = self.registers[*query as usize];
+                    let query_str = self.heap.get(query_ptr).map(|d| String::from_utf8_lossy(d).to_string()).unwrap_or_default();
 
                     let request = serde_json::json!({
                         "yield": true,
