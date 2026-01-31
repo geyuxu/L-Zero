@@ -136,9 +136,10 @@ define_isa! {
     WRITE { ptr: u8, offset: usize, val: u8 },
 
     // === 7. Extensions ===
-    // (REGEX is temporarily disabled)
-    // REGEX { dest: u8, pat: u8, text: u8 }, 
-    
+
+    /// Regex match: R[dest] = 1 if R[text] matches R[pat], else 0
+    REGEX { dest: u8, pat: u8, text: u8 },
+
     /// Execute Tool (ID, ArgReg, DestReg)
     TEXEC { tool: u16, arg: u8, dest: u8 },
 
@@ -155,5 +156,66 @@ define_isa! {
     WRITER { ptr: u8, off: u8, val: u8 },
 
     /// String concatenation: R[dest] = R[s1] + R[s2]
-    SCAT { dest: u8, s1: u8, s2: u8 }
+    SCAT { dest: u8, s1: u8, s2: u8 },
+
+    /// Store i64 register to heap (8 bytes): heap[R[ptr]][off*8..off*8+8] = R[val]
+    STORE64 { ptr: u8, off: u8, val: u8 },
+
+    /// Load i64 from heap to register: R[dest] = heap[R[ptr]][off*8..off*8+8]
+    LOAD64 { dest: u8, ptr: u8, off: u8 },
+
+    // === 8. Batch Memory Operations ===
+
+    /// Memory copy: copy R[len] bytes from heap[R[src]][R[soff]] to heap[R[dst]][R[doff]]
+    MEMCPY { dst: u8, doff: u8, src: u8, soff: u8, len: u8 },
+
+    /// Get heap allocation length: R[dest] = len(heap[R[ptr]])
+    HLEN { dest: u8, ptr: u8 },
+
+    /// Bulk read N bytes: R[dest] = new heap containing heap[R[ptr]][R[off]..R[off]+R[len]]
+    SLICE { dest: u8, ptr: u8, off: u8, len: u8 },
+
+    /// Memory set: fill heap[R[ptr]][R[off]..R[off]+R[len]] with byte R[val]
+    MEMSET { ptr: u8, off: u8, len: u8, val: u8 },
+
+    // === 9. Vector Operations (Semantic Computing) ===
+    // Vectors stored as: [dims:i64][f64 as bits][f64 as bits]...
+    // Results scaled by 1_000_000 for integer precision
+
+    /// Allocate vector: R[dest] = new vector of R[dims] dimensions (initialized to 0)
+    VNEW { dest: u8, dims: u8 },
+
+    /// Set vector element: vec[R[idx]] = f64::from_bits(R[val])
+    VSET { vec: u8, idx: u8, val: u8 },
+
+    /// Get vector element: R[dest] = vec[R[idx]] as i64 bits
+    VGET { dest: u8, vec: u8, idx: u8 },
+
+    /// Vector dot product: R[dest] = dot(v1, v2) * 1_000_000
+    VDOT { dest: u8, v1: u8, v2: u8 },
+
+    /// Cosine similarity: R[dest] = cos_sim(v1, v2) * 1_000_000 (range: -1M to +1M)
+    VSIM { dest: u8, v1: u8, v2: u8 },
+
+    /// Vector magnitude: R[dest] = |v| * 1_000_000
+    VMAG { dest: u8, vec: u8 },
+
+    /// Normalize vector in-place: v = v / |v|
+    VNORM { vec: u8 },
+
+    // === 10. Governance (Semantic Drift Control) ===
+    // Enables autonomous AI agents to detect and respond to semantic drift
+    // Reserved registers: R240=target_vec, R241=state_vec, R242=threshold, R243=last_sim
+
+    /// Latch target vector: R240 = R[target], R242 = R[threshold] (threshold * 1M)
+    LATCH { target: u8, threshold: u8 },
+
+    /// Check drift: compute VSIM(R240, R[state]), if < R242 then TRAP
+    GUARD { state: u8 },
+
+    /// Trap to supervisor: suspend VM, emit context JSON to stdout, wait for correction
+    TRAP { code: u8 },
+
+    /// Yield to supervisor: emit query, receive response into R[dest]
+    YIELD { query: u8, dest: u8 }
 }

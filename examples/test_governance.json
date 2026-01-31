@@ -1,0 +1,48 @@
+[
+    { "SETS": { "reg": 255, "val": "=== Governance Test ===" } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+
+    { "SETS": { "reg": 255, "val": "Creating target and state vectors..." } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+
+    { "SET": { "reg": 10, "val": 3 } },
+    { "VNEW": { "dest": 1, "dims": 10 } },
+    { "VNEW": { "dest": 2, "dims": 10 } },
+
+    { "SETS": { "reg": 255, "val": "Target = [1.0, 0.0, 0.0]" } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+    { "SET": { "reg": 20, "val": 0 } },
+    { "SET": { "reg": 21, "val": 4607182418800017408 } },
+    { "VSET": { "vec": 1, "idx": 20, "val": 21 } },
+
+    { "SETS": { "reg": 255, "val": "State = [0.9, 0.1, 0.0] (close to target)" } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+    { "SET": { "reg": 21, "val": 4606281698874543309 } },
+    { "VSET": { "vec": 2, "idx": 20, "val": 21 } },
+    { "SET": { "reg": 20, "val": 1 } },
+    { "SET": { "reg": 21, "val": 4591870180066957722 } },
+    { "VSET": { "vec": 2, "idx": 20, "val": 21 } },
+
+    { "SETS": { "reg": 255, "val": "Setting threshold = 0.85 (850000)" } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+    { "SET": { "reg": 30, "val": 850000 } },
+
+    { "SETS": { "reg": 255, "val": "LATCH: Loading target and threshold..." } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+    { "LATCH": { "target": 1, "threshold": 30 } },
+
+    { "SETS": { "reg": 255, "val": "GUARD: Checking state against target..." } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+    { "GUARD": { "state": 2 } },
+
+    { "SETS": { "reg": 255, "val": "GUARD passed! Reading last similarity from R243..." } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+    { "ITOA": { "dest": 40, "src": 243 } },
+    { "SETS": { "reg": 41, "val": "Similarity: " } },
+    { "SCAT": { "dest": 42, "s1": 41, "s2": 40 } },
+    { "TEXEC": { "tool": 20480, "arg": 42, "dest": 0 } },
+
+    { "SETS": { "reg": 255, "val": "=== Test Complete ===" } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+    "HALT"
+]

@@ -150,12 +150,36 @@ fn main() {
             "WRITE" => Instruction::WRITE { ptr: parse_u8(args, 0), offset: parse_usize(args, 1), val: parse_u8(args, 2) },
             
             // Extension
+            "REGEX" => Instruction::REGEX { dest: parse_u8(args, 0), pat: parse_u8(args, 1), text: parse_u8(args, 2) },
             "TEXEC" => Instruction::TEXEC { tool: parse_u16_hex(args, 0), arg: parse_u8(args, 1), dest: parse_u8(args, 2) },
             "ITOA" => Instruction::ITOA { dest: parse_u8(args, 0), src: parse_u8(args, 1) },
             "ATOI" => Instruction::ATOI { dest: parse_u8(args, 0), src: parse_u8(args, 1) },
             "READR" => Instruction::READR { dest: parse_u8(args, 0), ptr: parse_u8(args, 1), off: parse_u8(args, 2) },
             "WRITER" => Instruction::WRITER { ptr: parse_u8(args, 0), off: parse_u8(args, 1), val: parse_u8(args, 2) },
             "SCAT" => Instruction::SCAT { dest: parse_u8(args, 0), s1: parse_u8(args, 1), s2: parse_u8(args, 2) },
+            "STORE64" => Instruction::STORE64 { ptr: parse_u8(args, 0), off: parse_u8(args, 1), val: parse_u8(args, 2) },
+            "LOAD64" => Instruction::LOAD64 { dest: parse_u8(args, 0), ptr: parse_u8(args, 1), off: parse_u8(args, 2) },
+
+            // Batch Memory Operations
+            "MEMCPY" => Instruction::MEMCPY { dst: parse_u8(args, 0), doff: parse_u8(args, 1), src: parse_u8(args, 2), soff: parse_u8(args, 3), len: parse_u8(args, 4) },
+            "HLEN" => Instruction::HLEN { dest: parse_u8(args, 0), ptr: parse_u8(args, 1) },
+            "SLICE" => Instruction::SLICE { dest: parse_u8(args, 0), ptr: parse_u8(args, 1), off: parse_u8(args, 2), len: parse_u8(args, 3) },
+            "MEMSET" => Instruction::MEMSET { ptr: parse_u8(args, 0), off: parse_u8(args, 1), len: parse_u8(args, 2), val: parse_u8(args, 3) },
+
+            // Vector Operations (Semantic Computing)
+            "VNEW" => Instruction::VNEW { dest: parse_u8(args, 0), dims: parse_u8(args, 1) },
+            "VSET" => Instruction::VSET { vec: parse_u8(args, 0), idx: parse_u8(args, 1), val: parse_u8(args, 2) },
+            "VGET" => Instruction::VGET { dest: parse_u8(args, 0), vec: parse_u8(args, 1), idx: parse_u8(args, 2) },
+            "VDOT" => Instruction::VDOT { dest: parse_u8(args, 0), v1: parse_u8(args, 1), v2: parse_u8(args, 2) },
+            "VSIM" => Instruction::VSIM { dest: parse_u8(args, 0), v1: parse_u8(args, 1), v2: parse_u8(args, 2) },
+            "VMAG" => Instruction::VMAG { dest: parse_u8(args, 0), vec: parse_u8(args, 1) },
+            "VNORM" => Instruction::VNORM { vec: parse_u8(args, 0) },
+
+            // Governance (Semantic Drift Control)
+            "LATCH" => Instruction::LATCH { target: parse_u8(args, 0), threshold: parse_u8(args, 1) },
+            "GUARD" => Instruction::GUARD { state: parse_u8(args, 0) },
+            "TRAP" => Instruction::TRAP { code: parse_u8(args, 0) },
+            "YIELD" => Instruction::YIELD { query: parse_u8(args, 0), dest: parse_u8(args, 1) },
 
             _ => {
                 eprintln!("Error: Unknown Opcode '{}' at line {}", op, raw.line_num);

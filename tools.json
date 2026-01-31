@@ -1,181 +1,111 @@
 {
     "$schema": "L-0 Tool Registry v1.0",
-    "$doc": "工具注册表 - VM 通过此文件动态加载工具，无需修改 Rust 代码",
+    "$doc": "工具注册表 - VM 通过 TEXEC 指令调用此处定义的工具",
+
+    "$architecture": {
+        "layer1_isa": {
+            "description": "28 core primitives - register-based, compiled into VM",
+            "categories": {
+                "control": ["NOP", "HALT", "JMP", "BEQ", "BGT", "BLT", "CMP"],
+                "data": ["SET", "SETS", "MOV", "SWAP"],
+                "math": ["ADD", "SUB", "MUL", "DIV", "MOD"],
+                "logic": ["AND", "OR", "XOR", "NOT"],
+                "memory": ["NEW", "FREE", "READ", "WRITE", "READR", "WRITER", "STORE64", "LOAD64"],
+                "string": ["SCAT", "ITOA", "ATOI", "HLEN", "SLICE"],
+                "batch": ["MEMCPY", "MEMSET"],
+                "extension": ["REGEX", "TEXEC"],
+                "system": ["DUMP", "PANIC", "GAS", "ASSERT"]
+            },
+            "note": "These are NOT in tools.json - they are ISA instructions in lib.rs"
+        },
+        "layer2_builtins": {
+            "description": "VM-internal tools - string I/O via TEXEC, no external process",
+            "prefix": "0x5xxx",
+            "note": "Implemented in vm.rs execute_builtin()"
+        },
+        "layer3_plugins": {
+            "description": "External tools - JSON-RPC via stdin/stdout subprocess",
+            "prefixes": ["0x3xxx (AI)", "0x4xxx (File)", "0x6xxx (JSON)", "0x8xxx (HTTP)", "0x9xxx (DB)"],
+            "protocol": "See 'protocol' section below"
+        }
+    },
+
     "builtins": {
-        "0x1004": {
-            "name": "POW",
-            "type": "builtin"
-        },
-        "0x5000": {
-            "name": "PRINT",
-            "type": "builtin"
-        },
-        "0x5001": {
-            "name": "PRINTN",
-            "type": "builtin"
-        },
-        "0x5002": {
-            "name": "INPUT",
-            "type": "builtin"
-        },
-        "0x5003": {
-            "name": "RAND",
-            "type": "builtin"
-        },
-        "0x5004": {
-            "name": "STRLEN",
-            "type": "builtin"
-        },
-        "0x5005": {
-            "name": "ABS",
-            "type": "builtin"
-        },
-        "0x5006": {
-            "name": "MIN",
-            "type": "builtin"
-        },
-        "0x5007": {
-            "name": "MAX",
-            "type": "builtin"
-        },
-        "0x5008": {
-            "name": "TIME",
-            "type": "builtin"
-        },
-        "0x5009": {
-            "name": "CONCAT",
-            "type": "builtin"
-        },
-        "0x500A": {
-            "name": "SUBSTR",
-            "type": "builtin"
-        },
-        "0x500B": {
-            "name": "SPLIT",
-            "type": "builtin"
-        },
-        "0x500C": {
-            "name": "UPPER",
-            "type": "builtin"
-        },
-        "0x500D": {
-            "name": "LOWER",
-            "type": "builtin"
-        },
-        "0x500E": {
-            "name": "TRIM",
-            "type": "builtin"
+        "$note": "I/O and utility functions - no ISA equivalent, must use TEXEC",
+
+        "0x5000": { "name": "PRINT", "type": "builtin", "desc": "Print string with newline" },
+        "0x5001": { "name": "PRINTN", "type": "builtin", "desc": "Print string without newline" },
+        "0x5002": { "name": "INPUT", "type": "builtin", "desc": "Read line from stdin" },
+        "0x5003": { "name": "RAND", "type": "builtin", "desc": "Random number 0..arg" },
+        "0x5008": { "name": "TIME", "type": "builtin", "desc": "Unix timestamp" },
+
+        "0x5005": { "name": "ABS", "type": "builtin", "desc": "Absolute value (string arg)" },
+        "0x5006": { "name": "MIN", "type": "builtin", "desc": "Min of two (comma-separated)" },
+        "0x5007": { "name": "MAX", "type": "builtin", "desc": "Max of two (comma-separated)" },
+        "0x1004": { "name": "POW", "type": "builtin", "desc": "Power (base,exp)" },
+
+        "0x500C": { "name": "UPPER", "type": "builtin", "desc": "Uppercase string" },
+        "0x500D": { "name": "LOWER", "type": "builtin", "desc": "Lowercase string" },
+        "0x500E": { "name": "TRIM", "type": "builtin", "desc": "Trim whitespace" },
+        "0x500A": { "name": "SUBSTR", "type": "builtin", "desc": "Substring (str,start,len)" },
+        "0x500B": { "name": "SPLIT", "type": "builtin", "desc": "Split string by delimiter" },
+
+        "$deprecated": {
+            "0x5004": { "name": "STRLEN", "note": "Use ISA HLEN instead" },
+            "0x5009": { "name": "CONCAT", "note": "Use ISA SCAT instead" }
         }
     },
+
     "plugins": {
-        "0x4000": {
-            "name": "FILE_READ",
-            "type": "plugin",
-            "binary": "tools/file_plugin",
-            "method": "read"
-        },
-        "0x4001": {
-            "name": "FILE_WRITE",
-            "type": "plugin",
-            "binary": "tools/file_plugin",
-            "method": "write"
-        },
-        "0x4004": {
-            "name": "FILE_LIST",
-            "type": "plugin",
-            "binary": "tools/file_plugin",
-            "method": "list"
-        },
-        "0x4005": {
-            "name": "FILE_EXISTS",
-            "type": "plugin",
-            "binary": "tools/file_plugin",
-            "method": "exists"
-        },
-        "0x4003": {
-            "name": "FILE_DELETE",
-            "type": "plugin",
-            "binary": "tools/file_plugin",
-            "method": "delete"
-        },
-        "0x6000": {
-            "name": "JSON_LOAD",
-            "type": "plugin",
-            "binary": "tools/data_plugin",
-            "method": "json_load"
-        },
-        "0x6001": {
-            "name": "JSON_SAVE",
-            "type": "plugin",
-            "binary": "tools/data_plugin",
-            "method": "json_save"
-        },
-        "0x9000": {
-            "name": "DB_INIT",
-            "type": "plugin",
-            "binary": "tools/db_plugin",
-            "method": "init"
-        },
-        "0x9001": {
-            "name": "DB_CREATE_TABLE",
-            "type": "plugin",
-            "binary": "tools/db_plugin",
-            "method": "create_table"
-        },
-        "0x9002": {
-            "name": "DB_INSERT",
-            "type": "plugin",
-            "binary": "tools/db_plugin",
-            "method": "insert"
-        },
-        "0x9003": {
-            "name": "DB_SELECT",
-            "type": "plugin",
-            "binary": "tools/db_plugin",
-            "method": "select"
-        },
-        "0x8000": {
-            "name": "HTTP_INIT",
-            "type": "plugin",
-            "binary": "tools/http_plugin",
-            "method": "init"
-        },
-        "0x8001": {
-            "name": "ROUTE_BIND",
-            "type": "plugin",
-            "binary": "tools/http_plugin",
-            "method": "route"
-        },
-        "0x3000": {
-            "name": "EMBED",
-            "type": "plugin",
-            "binary": "tools/ai_plugin",
-            "method": "embed"
-        },
-        "0x3004": {
-            "name": "GENERATE",
-            "type": "plugin",
-            "binary": "tools/ai_plugin",
-            "method": "generate"
-        }
+        "$note": "External processes - communicate via JSON-RPC over stdin/stdout",
+
+        "0x4000": { "name": "FILE_READ", "type": "plugin", "binary": "tools/file_plugin", "method": "read" },
+        "0x4001": { "name": "FILE_WRITE", "type": "plugin", "binary": "tools/file_plugin", "method": "write" },
+        "0x4003": { "name": "FILE_DELETE", "type": "plugin", "binary": "tools/file_plugin", "method": "delete" },
+        "0x4004": { "name": "FILE_LIST", "type": "plugin", "binary": "tools/file_plugin", "method": "list" },
+        "0x4005": { "name": "FILE_EXISTS", "type": "plugin", "binary": "tools/file_plugin", "method": "exists" },
+
+        "0x6000": { "name": "JSON_LOAD", "type": "plugin", "binary": "tools/data_plugin", "method": "json_load" },
+        "0x6001": { "name": "JSON_SAVE", "type": "plugin", "binary": "tools/data_plugin", "method": "json_save" },
+        "0x6002": { "name": "JSON_GET", "type": "plugin", "binary": "tools/data_plugin", "method": "json_get" },
+        "0x6003": { "name": "JSON_SET", "type": "plugin", "binary": "tools/data_plugin", "method": "json_set" },
+        "0x6004": { "name": "JSON_PARSE", "type": "plugin", "binary": "tools/data_plugin", "method": "json_parse" },
+
+        "0x9000": { "name": "DB_INIT", "type": "plugin", "binary": "tools/db_plugin", "method": "init" },
+        "0x9001": { "name": "DB_CREATE_TABLE", "type": "plugin", "binary": "tools/db_plugin", "method": "create_table" },
+        "0x9002": { "name": "DB_INSERT", "type": "plugin", "binary": "tools/db_plugin", "method": "insert" },
+        "0x9003": { "name": "DB_SELECT", "type": "plugin", "binary": "tools/db_plugin", "method": "select" },
+        "0x9004": { "name": "DB_UPDATE", "type": "plugin", "binary": "tools/db_plugin", "method": "update" },
+        "0x9005": { "name": "DB_DELETE", "type": "plugin", "binary": "tools/db_plugin", "method": "delete" },
+        "0x9006": { "name": "DB_DROP_TABLE", "type": "plugin", "binary": "tools/db_plugin", "method": "drop_table" },
+        "0x9007": { "name": "DB_LIST_TABLES", "type": "plugin", "binary": "tools/db_plugin", "method": "list_tables" },
+
+        "0x8000": { "name": "HTTP_INIT", "type": "plugin", "binary": "tools/http_plugin", "method": "init" },
+        "0x8001": { "name": "HTTP_ROUTE", "type": "plugin", "binary": "tools/http_plugin", "method": "route" },
+        "0x8002": { "name": "HTTP_SERVE", "type": "plugin", "binary": "tools/http_plugin", "method": "serve" },
+        "0x8003": { "name": "HTTP_SERVE_ONCE", "type": "plugin", "binary": "tools/http_plugin", "method": "serve_once" },
+        "0x8004": { "name": "HTTP_REQUEST", "type": "plugin", "binary": "tools/http_plugin", "method": "request" },
+        "0x8005": { "name": "HTTP_LIST_ROUTES", "type": "plugin", "binary": "tools/http_plugin", "method": "list_routes" },
+
+        "0x3000": { "name": "AI_EMBED", "type": "plugin", "binary": "tools/ai_plugin", "method": "embed", "note": "Optional" },
+        "0x3004": { "name": "AI_GENERATE", "type": "plugin", "binary": "tools/ai_plugin", "method": "generate", "note": "Optional" }
     },
+
     "protocol": {
+        "$doc": "JSON-RPC protocol for plugin communication",
         "request": {
-            "format": "JSON via stdin",
-            "schema": {
-                "method": "string",
-                "args": [
-                    "any"
-                ]
-            }
+            "format": "JSON + newline via stdin",
+            "example": "{\"method\": \"select\", \"args\": [\"users|id=1\"]}\n"
         },
         "response": {
             "format": "JSON via stdout",
-            "schema": {
-                "ok": "bool",
-                "value": "any",
-                "error": "string?"
-            }
+            "schema": { "ok": "bool", "value": "any", "error": "string?" },
+            "example": "{\"ok\":true,\"value\":[{\"id\":1,\"name\":\"test\"}]}"
+        },
+        "arg_convention": {
+            "single": "plain string",
+            "multiple": "pipe-separated: arg1|arg2|arg3",
+            "note": "Plugins parse pipe delimiter internally"
         }
     }
 }

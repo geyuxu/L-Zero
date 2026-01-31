@@ -4,3 +4,8 @@ bin/
 out/
 target/
 tools/file_plugin
+tools/data_plugin
+tools/db_plugin
+tools/http_plugin
+l0_database.json
+.DS_Store

@@ -1,11 +1,12 @@
-# L-Zero (v0.3): The Native Language of AI Agents
+# L-Zero (v1.0): The Native Language of AI Agents
 
 L-Zero is a **low-level, structural instruction set** designed specifically for AI generation, not human writing.
 
 Unlike traditional languages that prioritize human readability (syntax sugar, complex parsers), L-Zero prioritizes **Machine Determinism**:
 - **Dual Format**: JSON for debugging/generation, Binary (Bincode) for execution
 - **Type-Safe**: Based on a strict Rust Enum definition, ensuring 100% valid structure
-- **Agentic Extensibility**: Core logic is minimal (29 Primitives); infinite capability via dynamic Tools (Plugins)
+- **Agentic Extensibility**: Core logic (52 Primitives) with semantic computing; infinite capability via dynamic Tools (Plugins)
+- **AOT Compilation**: Compile to native C code for maximum performance
 
 ---
 
@@ -13,32 +14,60 @@ Unlike traditional languages that prioritize human readability (syntax sugar, co
 
 ### 1. Build
 ```bash
-cargo build --release --bin l0vm --bin l0asm
-mkdir -p bin
-cp target/release/l0vm bin/
-cp target/release/l0asm bin/
+cargo build --release
 ```
 
 ### 2. Run Examples
 ```bash
 # JSON format (direct execution)
-./bin/l0vm examples/hello.json
+./target/release/l0vm examples/hello.json
 
 # Assembly format (compile then run)
-./bin/l0asm examples/bubble_sort.asm > /tmp/out.l0
-./bin/l0vm /tmp/out.l0
+./target/release/l0asm examples/bubble_sort.asm > /tmp/out.l0
+./target/release/l0vm /tmp/out.l0
 
-# Run test suite
-./examples/run_tests.sh
+# AOT compile to native binary
+./target/release/l0cc examples/hello.json -o hello.c
+gcc -O2 hello.c -o hello && ./hello
 ```
 
 ---
 
-## Architecture (v0.3)
+## Architecture (v1.0)
 
-L-Zero v0.3 adopts a **Protocol-First** architecture with Assembly support.
+L-Zero v1.0 adopts a **Three-Layer Architecture**:
 
-### 1. The ISA (29 Instructions)
+```
++---------------------------------------------------------------+
+| Layer 1: ISA Core (52 primitives)                             |
+| ------------------------------------------------------------- |
+| - Register-based operations, compiled into VM                 |
+| - ADD, SUB, MUL, DIV, MOD, SCAT, HLEN, REGEX, etc.           |
+| - Defined in lib.rs, executed directly                        |
++---------------------------------------------------------------+
+                              |
+                              | TEXEC instruction
+                              v
++---------------------------------------------------------------+
+| Layer 2: Builtins (0x5xxx)                                    |
+| ------------------------------------------------------------- |
+| - String-based I/O, no external process                       |
+| - PRINT, INPUT, RAND, TIME, UPPER, LOWER, etc.               |
+| - Implemented in vm.rs execute_builtin()                      |
++---------------------------------------------------------------+
+                              |
+                              | TEXEC instruction
+                              v
++---------------------------------------------------------------+
+| Layer 3: Plugins (0x3xxx-0x9xxx)                              |
+| ------------------------------------------------------------- |
+| - External subprocess, JSON-RPC protocol                      |
+| - DB, HTTP, File, JSON, AI                                    |
+| - Cross-language support (Rust, Swift, Python, etc.)         |
++---------------------------------------------------------------+
+```
+
+### 1. The ISA (52 Instructions)
 
 The language is defined by the `Instruction` enum in `src/lib.rs`:
 
@@ -50,70 +79,72 @@ The language is defined by the `Instruction` enum in `src/lib.rs`:
 | **Logic** | `AND`, `OR`, `XOR`, `NOT` | Bitwise Operations |
 | **Control** | `CMP`, `JMP`, `BEQ`, `BGT`, `BLT` | Flow Control (Line numbers) |
 | **Memory** | `NEW`, `FREE`, `READ`, `WRITE`, `READR`, `WRITER` | Safe Managed Heap |
-| **Extensions** | `TEXEC`, `ITOA`, `ATOI`, `SCAT` | Tools & String Operations |
+| **Extensions** | `TEXEC`, `ITOA`, `ATOI`, `SCAT`, `REGEX` | Tools & String Operations |
+| **64-bit** | `STORE64`, `LOAD64` | Store/Load full i64 to heap |
+| **Batch** | `MEMCPY`, `HLEN`, `SLICE`, `MEMSET` | Bulk memory operations |
+| **Vector** | `VNEW`, `VSET`, `VGET`, `VDOT`, `VSIM`, `VMAG`, `VNORM` | Semantic Computing |
+| **Governance** | `LATCH`, `GUARD`, `TRAP`, `YIELD` | Autonomous AI Drift Control |
 
-### 2. The Runtime
+### 2. The Toolchain
 
-`l0vm` is a direct-execution engine that:
-- Loads JSON programs directly, or Bincode (.l0) bytecode
-- Executes with 256-register file and managed heap
-- Invokes tools via `TEXEC` instruction
+| Binary | Description |
+|--------|-------------|
+| `l0vm` | Virtual Machine - executes .json or .l0 programs |
+| `l0asm`| Assembler - compiles .asm to .l0 bytecode |
+| `l0cc` | AOT Compiler - compiles .l0/.json to C code |
+
+```
++-----------+   l0asm   +-----------+   l0vm    +-----------+
+|  .asm     | --------> |  .l0      | --------> |  Execute  |
+|  Assembly |           |  Bytecode |           |  Result   |
++-----------+           +-----------+           +-----------+
+                              |
+                              | l0cc
+                              v
+                        +-----------+    gcc    +-----------+
+                        |  .c       | --------> |  Native   |
+                        |  C Code   |           |  Binary   |
+                        +-----------+           +-----------+
+```
 
 ### 3. The Tool Registry
 
-The `TEXEC` instruction invokes external capabilities defined in `tools.json`:
+The `TEXEC` instruction invokes capabilities defined in `tools.json`:
 
-**Built-in Tools:**
+**Built-in Tools (I/O):**
 | ID | Name | Description |
 |----|------|-------------|
 | `0x5000` | PRINT | Print with newline |
 | `0x5001` | PRINTN | Print without newline |
 | `0x5002` | INPUT | Read line from stdin |
 | `0x5003` | RAND | Random number |
-| `0x5004` | STRLEN | String length |
-| `0x5005` | ABS | Absolute value |
-| `0x5006` | MIN | Minimum of two values |
-| `0x5007` | MAX | Maximum of two values |
 | `0x5008` | TIME | Unix timestamp |
+
+**Built-in Tools (String):**
+| ID | Name | Description |
+|----|------|-------------|
 | `0x500C` | UPPER | Uppercase string |
 | `0x500D` | LOWER | Lowercase string |
 | `0x500E` | TRIM | Trim whitespace |
+| `0x500A` | SUBSTR | Substring |
+| `0x500B` | SPLIT | Split string |
+
+**Built-in Tools (Math):**
+| ID | Name | Description |
+|----|------|-------------|
+| `0x5005` | ABS | Absolute value |
+| `0x5006` | MIN | Minimum of two |
+| `0x5007` | MAX | Maximum of two |
 | `0x1004` | POW | Power function |
 
-**Plugin Protocol:**
-Add new capabilities without recompiling. Edit `tools.json`:
-```json
-"plugins": {
-    "0x7000": {
-        "name": "MY_TOOL",
-        "type": "plugin",
-        "binary": "tools/my_script.py",
-        "method": "run"
-    }
-}
-```
-Plugins communicate via JSON-RPC over stdin/stdout.
-
----
-
-## Toolchain
-
-```
-┌─────────────┐    l0asm     ┌─────────────┐    l0vm      ┌─────────────┐
-│  .asm       │ ──────────►  │  .l0        │ ──────────►  │  Execute    │
-│  Assembly   │              │  Bytecode   │              │  Result     │
-└─────────────┘              └─────────────┘              └─────────────┘
-
-                             ┌─────────────┐
-                             │  .json      │ ──────────►  (l0vm direct)
-                             │  JSON       │
-                             └─────────────┘
-```
-
-| Binary | Description |
-|--------|-------------|
-| `l0vm` | Virtual Machine - executes .json or .l0 programs |
-| `l0asm`| Assembler - compiles .asm to .l0 bytecode |
+**Plugins:**
+| Prefix | Category | Examples |
+|--------|----------|----------|
+| `0x4xxx` | File I/O | FILE_READ, FILE_WRITE, FILE_EXISTS |
+| `0x6xxx` | JSON | JSON_LOAD, JSON_SAVE, JSON_GET |
+| `0x8xxx` | HTTP | HTTP_SERVE, HTTP_REQUEST, HTTP_ROUTE |
+| `0x9xxx` | Database | DB_CREATE_TABLE, DB_INSERT, DB_SELECT |
+| `0x3xxx` | AI | AI_EMBED, AI_GENERATE |
 
 ---
 
@@ -136,29 +167,57 @@ TEXEC 0x5000, 1, 255
 HALT
 ```
 
-### Test Suite
-
-Comprehensive test coverage in `examples/`:
-
-| Test | Coverage |
-|------|----------|
-| `test_basic.asm` | SET, MOV, SWAP, SETS, ITOA, ATOI |
-| `test_math.asm` | ADD, SUB, MUL, DIV, MOD, AND, OR, XOR, NOT |
-| `test_memory.asm` | NEW, FREE, READ, WRITE, READR, WRITER |
-| `test_control.asm` | JMP, BEQ, BGT, BLT, loops |
-| `test_string.asm` | STRLEN, UPPER, LOWER, TRIM, SCAT |
-| `test_tools.asm` | PRINT, ABS, RAND, TIME |
-| `test_all.asm` | Comprehensive suite (17 tests) |
-| `bubble_sort.asm` | Algorithm example |
-
-Run all tests:
-```bash
-./examples/run_tests.sh
+### REGEX Example
+```json
+[
+  { "SETS": { "reg": 1, "val": "[0-9]+" } },
+  { "SETS": { "reg": 2, "val": "test123abc" } },
+  { "REGEX": { "dest": 3, "pat": 1, "text": 2 } },
+  { "ITOA": { "dest": 4, "src": 3 } },
+  { "TEXEC": { "tool": 20480, "arg": 4, "dest": 0 } },
+  "HALT"
+]
 ```
+
+### Database Example
+```json
+[
+  { "SETS": { "reg": 1, "val": "users" } },
+  { "TEXEC": { "tool": 36865, "arg": 1, "dest": 2 } },
+  { "SETS": { "reg": 1, "val": "users|{\"name\":\"Alice\"}" } },
+  { "TEXEC": { "tool": 36866, "arg": 1, "dest": 2 } },
+  { "SETS": { "reg": 1, "val": "users" } },
+  { "TEXEC": { "tool": 36867, "arg": 1, "dest": 2 } },
+  { "TEXEC": { "tool": 20480, "arg": 2, "dest": 0 } },
+  "HALT"
+]
+```
+
+### Blog Web Server (Full-Stack Example)
+A complete web application using DB + HTTP plugins together:
+```bash
+./target/release/l0vm examples/blog_web.json
+# Server starts at http://127.0.0.1:8080
+# Routes: GET / (styled HTML), GET /api (JSON data)
+```
+
+The example demonstrates:
+- **Database Plugin** (`0x9xxx`): Initialize DB, create table, insert posts
+- **HTTP Plugin** (`0x8xxx`): Configure server, register routes, serve requests
+- **String Operations**: `SCAT` for building HTML from fragments
+- **Dynamic Content**: Posts fetched from DB rendered into HTML via JavaScript
 
 ---
 
 ## Key Concepts
+
+### ISA vs Builtins vs Plugins
+
+| Layer | Example | Interface | Use Case |
+|-------|---------|-----------|----------|
+| ISA | `ADD 1, 2, 3` | Register-based | Fast computation |
+| Builtin | `TEXEC 0x5000` | String via TEXEC | I/O operations |
+| Plugin | `TEXEC 0x9003` | JSON-RPC subprocess | External services |
 
 ### TEXEC Returns Heap Pointer
 All tool calls return strings stored on heap. Use `ATOI` to convert to integer:
@@ -168,18 +227,36 @@ TEXEC 0x5005, 1, 2    # ABS returns string "42"
 ATOI 3, 2             # Convert to integer 42
 ```
 
-### Memory Values are u8
-`WRITE`/`READ` store bytes (0-255). Values are truncated:
+### Batch Memory Operations
 ```asm
-SET 50, 300           # 300 mod 256 = 44
-WRITE 10, 0, 50       # Stores 44, not 300
+SETS 1, Hello World
+HLEN 2, 1             # R2 = 11 (length)
+SET 3, 0              # offset
+SET 4, 5              # length
+SLICE 5, 1, 3, 4      # R5 = "Hello" (new heap)
 ```
 
-### Comma Limitation in ASM
-Commas are argument separators. For strings with commas, use JSON format:
-```json
-{ "SETS": { "reg": 1, "val": "2,10" } }
+### Semantic Computing (Vector Operations)
+L-0 provides native vector operations for AI agents to monitor semantic drift:
+```asm
+SET 10, 768            # embedding dimension
+VNEW 1, 10             # target vector
+VNEW 2, 10             # current state vector
+VSIM 3, 1, 2           # R3 = cosine_similarity * 1,000,000
 ```
+
+### Governance (Autonomous AI Control)
+Enable AI agents to self-monitor and request human intervention:
+```asm
+SET 30, 800000         # threshold = 0.8
+LATCH 1, 30            # set target vector and threshold
+GUARD 2                # check state; TRAP if drift detected
+```
+
+When drift is detected, GUARD triggers TRAP which:
+1. Suspends VM execution
+2. Emits JSON context to supervisor
+3. Waits for correction instruction
 
 ---
 
@@ -187,19 +264,18 @@ Commas are argument separators. For strings with commas, use JSON format:
 
 ```
 .
-├── bin/                # Compiled binaries
 ├── src/                # Rust Source
-│   ├── lib.rs          # ISA Definition (29 instructions)
-│   ├── vm.rs           # Virtual Machine (~530 LOC)
-│   └── asm.rs          # Assembler (~220 LOC)
-├── tools/              # External Plugins
-│   └── file_plugin     # File I/O plugin
-├── tools.json          # Tool Registry (31 tools)
+│   ├── lib.rs          # ISA Definition (52 instructions)
+│   ├── vm.rs           # Virtual Machine
+│   ├── asm.rs          # Assembler
+│   └── compiler.rs     # AOT Compiler
+├── tools/              # Plugins (Rust source)
+│   ├── file_plugin.rs
+│   ├── db_plugin.rs
+│   ├── data_plugin.rs
+│   └── http_plugin.rs
+├── tools.json          # Tool Registry (40+ tools)
 ├── examples/           # Example & Test Programs
-│   ├── hello.json      # Hello World (JSON)
-│   ├── bubble_sort.asm # Sorting algorithm
-│   ├── test_*.asm      # Test suites
-│   └── run_tests.sh    # Test runner
 ├── BOOT.md             # Detailed documentation
 └── README.md           # This file
 ```
@@ -208,7 +284,7 @@ Commas are argument separators. For strings with commas, use JSON format:
 
 Query the VM for ISA and tools:
 ```bash
-./bin/l0vm --info
+./target/release/l0vm --info
 ```
 
 ## License

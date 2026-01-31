@@ -13,6 +13,10 @@ path = "src/vm.rs"
 name = "l0asm"
 path = "src/asm.rs"
 
+[[bin]]
+name = "l0cc"
+path = "src/compiler.rs"
+
 [dependencies]
 atty = "0.2.14"
 regex = "1.12.2"

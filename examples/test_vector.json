@@ -1,0 +1,79 @@
+[
+    { "SETS": { "reg": 255, "val": "=== Vector Operations Test ===" } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+
+    { "SETS": { "reg": 255, "val": "--- Create two 3D vectors ---" } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+
+    { "SET": { "reg": 10, "val": 3 } },
+    { "VNEW": { "dest": 1, "dims": 10 } },
+    { "VNEW": { "dest": 2, "dims": 10 } },
+
+    { "SETS": { "reg": 255, "val": "v1 = [1.0, 0.0, 0.0] (unit X)" } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+
+    { "SET": { "reg": 20, "val": 0 } },
+    { "SET": { "reg": 21, "val": 4607182418800017408 } },
+    { "VSET": { "vec": 1, "idx": 20, "val": 21 } },
+
+    { "SETS": { "reg": 255, "val": "v2 = [0.707, 0.707, 0.0] (45 degree)" } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+
+    { "SET": { "reg": 21, "val": 4604544271217802189 } },
+    { "VSET": { "vec": 2, "idx": 20, "val": 21 } },
+    { "SET": { "reg": 20, "val": 1 } },
+    { "VSET": { "vec": 2, "idx": 20, "val": 21 } },
+
+    { "SETS": { "reg": 255, "val": "--- Cosine Similarity ---" } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+
+    { "VSIM": { "dest": 30, "v1": 1, "v2": 2 } },
+    { "ITOA": { "dest": 31, "src": 30 } },
+    { "SETS": { "reg": 32, "val": "cos_sim(v1, v2) * 1M = " } },
+    { "SCAT": { "dest": 33, "s1": 32, "s2": 31 } },
+    { "TEXEC": { "tool": 20480, "arg": 33, "dest": 0 } },
+
+    { "SETS": { "reg": 255, "val": "(Expected ~707000 for cos(45deg) = 0.707)" } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+
+    { "SETS": { "reg": 255, "val": "--- Dot Product ---" } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+
+    { "VDOT": { "dest": 40, "v1": 1, "v2": 2 } },
+    { "ITOA": { "dest": 41, "src": 40 } },
+    { "SETS": { "reg": 42, "val": "dot(v1, v2) * 1M = " } },
+    { "SCAT": { "dest": 43, "s1": 42, "s2": 41 } },
+    { "TEXEC": { "tool": 20480, "arg": 43, "dest": 0 } },
+
+    { "SETS": { "reg": 255, "val": "--- Magnitude ---" } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+
+    { "VMAG": { "dest": 50, "vec": 1 } },
+    { "ITOA": { "dest": 51, "src": 50 } },
+    { "SETS": { "reg": 52, "val": "|v1| * 1M = " } },
+    { "SCAT": { "dest": 53, "s1": 52, "s2": 51 } },
+    { "TEXEC": { "tool": 20480, "arg": 53, "dest": 0 } },
+
+    { "VMAG": { "dest": 54, "vec": 2 } },
+    { "ITOA": { "dest": 55, "src": 54 } },
+    { "SETS": { "reg": 56, "val": "|v2| * 1M = " } },
+    { "SCAT": { "dest": 57, "s1": 56, "s2": 55 } },
+    { "TEXEC": { "tool": 20480, "arg": 57, "dest": 0 } },
+
+    { "SETS": { "reg": 255, "val": "--- Normalize v2 ---" } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+
+    { "VNORM": { "vec": 2 } },
+    { "VMAG": { "dest": 60, "vec": 2 } },
+    { "ITOA": { "dest": 61, "src": 60 } },
+    { "SETS": { "reg": 62, "val": "|v2| after norm * 1M = " } },
+    { "SCAT": { "dest": 63, "s1": 62, "s2": 61 } },
+    { "TEXEC": { "tool": 20480, "arg": 63, "dest": 0 } },
+
+    { "SETS": { "reg": 255, "val": "(Expected ~1000000 for unit vector)" } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+
+    { "SETS": { "reg": 255, "val": "=== Test Complete ===" } },
+    { "TEXEC": { "tool": 20480, "arg": 255, "dest": 0 } },
+    "HALT"
+]
