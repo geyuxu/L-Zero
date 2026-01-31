@@ -1,0 +1,6 @@
+.claude/
+Cargo.lock
+bin/
+out/
+target/
+tools/file_plugin

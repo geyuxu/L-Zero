@@ -1,0 +1,216 @@
+mod lib;
+use lib::Instruction;
+use std::env;
+use std::fs;
+use std::io::{Read, BufRead, BufReader};
+use std::collections::HashMap;
+
+// Intermediate Instruction Representation
+#[derive(Debug)]
+struct RawInstr {
+    line_num: usize,
+    op: String,
+    args: Vec<String>,
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() < 2 {
+        eprintln!("Usage: l0asm <file.l0>");
+        std::process::exit(1);
+    }
+
+    let path = &args[1];
+    let file = fs::File::open(path).expect("Failed to open file");
+    let reader = BufReader::new(file);
+
+    // --- Pass 1: Parse & Collect Labels ---
+    let mut instructions: Vec<RawInstr> = Vec::new();
+    let mut labels: HashMap<String, usize> = HashMap::new();
+    let mut current_index = 0;
+
+    for (line_idx, line_r) in reader.lines().enumerate() {
+        let line = line_r.expect("Failed to read line");
+        let trim = line.trim();
+        
+        // Skip comments and empty lines
+        if trim.is_empty() || trim.starts_with('#') || trim.starts_with("//") {
+            continue;
+        }
+
+        // Handle Inline Comments "OP ... # comment"
+        let code_part = trim.split('#').next().unwrap().split("//").next().unwrap().trim();
+        if code_part.is_empty() { continue; }
+
+        // Check for Label "Label:"
+        if code_part.ends_with(':') {
+            let label_name = &code_part[..code_part.len()-1];
+            if labels.contains_key(label_name) {
+                eprintln!("Error: Duplicate Label '{}' at line {}", label_name, line_idx + 1);
+                std::process::exit(1);
+            }
+            labels.insert(label_name.to_string(), current_index);
+            continue;
+        }
+
+        // Parse Instruction "OP arg1, arg2"
+        let parts: Vec<&str> = code_part.splitn(2, |c: char| c.is_whitespace()).collect();
+        let op = parts[0].to_uppercase();
+        
+        // Parse Args (comma separated)
+        let args_vec: Vec<String> = if parts.len() > 1 {
+            // Split by comma, but be careful with strings? 
+            // Minimal: Split by comma. String args like "Hello, World" might break.
+            // Requirement for strings: "SETS".
+            // Minimal parser: naive split.
+            // To support "SETS 1, "Hello, World"", we need slightly better parsing.
+            // But let's stick to "Simple". If needed, users can avoid commas in strings or we patch.
+            // Actually, L-0 strings often don't have commas. Or we can just grab the rest for SETS/PANIC.
+            
+            // Special handling for SETS/PANIC who take String?
+            // "SETS 1, Hello World" -> args: ["1", "Hello World"]
+            // "PANIC Error" -> args: ["Error"]
+            
+            // Re-join logic for robustness
+            let rest = parts[1];
+            let mut arg_list = Vec::new();
+            
+            // Naive split by comma for now.
+            // TODO: Better string parsing if needed.
+            for arg_s in rest.split(',') {
+                 arg_list.push(arg_s.trim().to_string());
+            }
+            arg_list
+        } else {
+            Vec::new()
+        };
+
+        instructions.push(RawInstr {
+            line_num: line_idx + 1,
+            op,
+            args: args_vec,
+        });
+        current_index += 1;
+    }
+
+    // --- Pass 2: Resolve & Build ---
+    let mut program: Vec<Instruction> = Vec::new();
+
+    for raw in instructions {
+        let op = raw.op.as_str();
+        let args = &raw.args;
+
+        let instr = match op {
+            // System
+            "NOP" => Instruction::NOP,
+            "HALT" => Instruction::HALT,
+            "DUMP" => Instruction::DUMP,
+            "PANIC" => {
+                // Tuple variant PANIC(String)
+                // If arg contains quotes, strip them? Minimal: take as is.
+                let msg = args.join(", "); // Re-join if split by accident
+                 Instruction::PANIC(msg.replace("\"", "")) 
+            },
+            "GAS" => Instruction::GAS(parse_u8(args, 0)),
+            "ASSERT" => Instruction::ASSERT(parse_u8(args, 0)),
+
+            // Registers
+            "SET" => Instruction::SET { reg: parse_u8(args, 0), val: parse_i64(args, 1) },
+            "SETS" => Instruction::SETS { reg: parse_u8(args, 0), val: parse_str(args, 1) }, 
+            "MOV" => Instruction::MOV { dest: parse_u8(args, 0), src: parse_u8(args, 1) },
+            "SWAP" => Instruction::SWAP { r1: parse_u8(args, 0), r2: parse_u8(args, 1) },
+
+            // Math
+            "ADD" => Instruction::ADD { dest: parse_u8(args, 0), s1: parse_u8(args, 1), s2: parse_u8(args, 2) },
+            "SUB" => Instruction::SUB { dest: parse_u8(args, 0), s1: parse_u8(args, 1), s2: parse_u8(args, 2) },
+            "MUL" => Instruction::MUL { dest: parse_u8(args, 0), s1: parse_u8(args, 1), s2: parse_u8(args, 2) },
+            "DIV" => Instruction::DIV { dest: parse_u8(args, 0), s1: parse_u8(args, 1), s2: parse_u8(args, 2) },
+            "MOD" => Instruction::MOD { dest: parse_u8(args, 0), s1: parse_u8(args, 1), s2: parse_u8(args, 2) },
+
+            // Logic
+            "AND" => Instruction::AND { dest: parse_u8(args, 0), s1: parse_u8(args, 1), s2: parse_u8(args, 2) },
+            "OR" =>  Instruction::OR  { dest: parse_u8(args, 0), s1: parse_u8(args, 1), s2: parse_u8(args, 2) },
+            "XOR" => Instruction::XOR { dest: parse_u8(args, 0), s1: parse_u8(args, 1), s2: parse_u8(args, 2) },
+            "NOT" => Instruction::NOT { dest: parse_u8(args, 0), src: parse_u8(args, 1) },
+
+            // Control
+            "CMP" => Instruction::CMP { r1: parse_u8(args, 0), r2: parse_u8(args, 1) },
+            
+            // Jumps with Label Resolution
+            "JMP" => Instruction::JMP { target: resolve_label(&args[0], &labels) },
+            "BEQ" => Instruction::BEQ { target: resolve_label(&args[0], &labels) },
+            "BGT" => Instruction::BGT { target: resolve_label(&args[0], &labels) },
+            "BLT" => Instruction::BLT { target: resolve_label(&args[0], &labels) },
+
+            // Memory
+            "NEW" => Instruction::NEW { dest: parse_u8(args, 0), size: parse_usize(args, 1) },
+            "FREE" => Instruction::FREE { ptr: parse_u8(args, 0) },
+            "READ" => Instruction::READ { dest: parse_u8(args, 0), ptr: parse_u8(args, 1), offset: parse_usize(args, 2) },
+            "WRITE" => Instruction::WRITE { ptr: parse_u8(args, 0), offset: parse_usize(args, 1), val: parse_u8(args, 2) },
+            
+            // Extension
+            "TEXEC" => Instruction::TEXEC { tool: parse_u16_hex(args, 0), arg: parse_u8(args, 1), dest: parse_u8(args, 2) },
+            "ITOA" => Instruction::ITOA { dest: parse_u8(args, 0), src: parse_u8(args, 1) },
+            "ATOI" => Instruction::ATOI { dest: parse_u8(args, 0), src: parse_u8(args, 1) },
+            "READR" => Instruction::READR { dest: parse_u8(args, 0), ptr: parse_u8(args, 1), off: parse_u8(args, 2) },
+            "WRITER" => Instruction::WRITER { ptr: parse_u8(args, 0), off: parse_u8(args, 1), val: parse_u8(args, 2) },
+
+            _ => {
+                eprintln!("Error: Unknown Opcode '{}' at line {}", op, raw.line_num);
+                std::process::exit(1);
+            }
+        };
+        program.push(instr);
+    }
+    
+    // Output Binary (Bincode)
+    let encoded: Vec<u8> = bincode::serialize(&program).expect("Failed to serialize to binary");
+    
+    // Write to stdout (for piping) or file
+    // If output is piped, use write_all to stdout. Note: Don't use println! for binary.
+    use std::io::Write;
+    std::io::stdout().write_all(&encoded).expect("Failed to write binary to stdout");
+}
+
+// --- Helpers ---
+
+fn parse_u8(args: &[String], idx: usize) -> u8 {
+    args.get(idx).expect("Missing Argument").parse().expect("Invalid u8")
+}
+
+fn parse_u16_hex(args: &[String], idx: usize) -> u16 {
+    let s = args.get(idx).expect("Missing Argument");
+    if s.starts_with("0x") {
+        u16::from_str_radix(&s[2..], 16).expect("Invalid Hex u16")
+    } else {
+        s.parse().expect("Invalid u16")
+    }
+}
+
+fn parse_i64(args: &[String], idx: usize) -> i64 {
+    args.get(idx).expect("Missing Argument").parse().expect("Invalid i64")
+}
+
+fn parse_usize(args: &[String], idx: usize) -> usize {
+    args.get(idx).expect("Missing Argument").parse().expect("Invalid usize")
+}
+
+fn parse_str(args: &[String], idx: usize) -> String {
+    // Rejoin rest of args to support strings with commas if needed?
+    // For now just take the indexed one and strip quotes
+    let s = args.get(idx).expect("Missing Argument");
+    s.replace("\"", "")
+}
+
+fn resolve_label(target: &str, labels: &HashMap<String, usize>) -> usize {
+    // Try to parse as explicit integer first
+    if let Ok(idx) = target.parse::<usize>() {
+        return idx;
+    }
+    // Lookup label
+    *labels.get(target).unwrap_or_else(|| {
+        eprintln!("Error: Undefined Label '{}'", target);
+        std::process::exit(1);
+    })
+}

@@ -1,0 +1,181 @@
+{
+    "$schema": "L-0 Tool Registry v1.0",
+    "$doc": "工具注册表 - VM 通过此文件动态加载工具，无需修改 Rust 代码",
+    "builtins": {
+        "0x1004": {
+            "name": "POW",
+            "type": "builtin"
+        },
+        "0x5000": {
+            "name": "PRINT",
+            "type": "builtin"
+        },
+        "0x5001": {
+            "name": "PRINTN",
+            "type": "builtin"
+        },
+        "0x5002": {
+            "name": "INPUT",
+            "type": "builtin"
+        },
+        "0x5003": {
+            "name": "RAND",
+            "type": "builtin"
+        },
+        "0x5004": {
+            "name": "STRLEN",
+            "type": "builtin"
+        },
+        "0x5005": {
+            "name": "ABS",
+            "type": "builtin"
+        },
+        "0x5006": {
+            "name": "MIN",
+            "type": "builtin"
+        },
+        "0x5007": {
+            "name": "MAX",
+            "type": "builtin"
+        },
+        "0x5008": {
+            "name": "TIME",
+            "type": "builtin"
+        },
+        "0x5009": {
+            "name": "CONCAT",
+            "type": "builtin"
+        },
+        "0x500A": {
+            "name": "SUBSTR",
+            "type": "builtin"
+        },
+        "0x500B": {
+            "name": "SPLIT",
+            "type": "builtin"
+        },
+        "0x500C": {
+            "name": "UPPER",
+            "type": "builtin"
+        },
+        "0x500D": {
+            "name": "LOWER",
+            "type": "builtin"
+        },
+        "0x500E": {
+            "name": "TRIM",
+            "type": "builtin"
+        }
+    },
+    "plugins": {
+        "0x4000": {
+            "name": "FILE_READ",
+            "type": "plugin",
+            "binary": "tools/file_plugin",
+            "method": "read"
+        },
+        "0x4001": {
+            "name": "FILE_WRITE",
+            "type": "plugin",
+            "binary": "tools/file_plugin",
+            "method": "write"
+        },
+        "0x4004": {
+            "name": "FILE_LIST",
+            "type": "plugin",
+            "binary": "tools/file_plugin",
+            "method": "list"
+        },
+        "0x4005": {
+            "name": "FILE_EXISTS",
+            "type": "plugin",
+            "binary": "tools/file_plugin",
+            "method": "exists"
+        },
+        "0x4003": {
+            "name": "FILE_DELETE",
+            "type": "plugin",
+            "binary": "tools/file_plugin",
+            "method": "delete"
+        },
+        "0x6000": {
+            "name": "JSON_LOAD",
+            "type": "plugin",
+            "binary": "tools/data_plugin",
+            "method": "json_load"
+        },
+        "0x6001": {
+            "name": "JSON_SAVE",
+            "type": "plugin",
+            "binary": "tools/data_plugin",
+            "method": "json_save"
+        },
+        "0x9000": {
+            "name": "DB_INIT",
+            "type": "plugin",
+            "binary": "tools/db_plugin",
+            "method": "init"
+        },
+        "0x9001": {
+            "name": "DB_CREATE_TABLE",
+            "type": "plugin",
+            "binary": "tools/db_plugin",
+            "method": "create_table"
+        },
+        "0x9002": {
+            "name": "DB_INSERT",
+            "type": "plugin",
+            "binary": "tools/db_plugin",
+            "method": "insert"
+        },
+        "0x9003": {
+            "name": "DB_SELECT",
+            "type": "plugin",
+            "binary": "tools/db_plugin",
+            "method": "select"
+        },
+        "0x8000": {
+            "name": "HTTP_INIT",
+            "type": "plugin",
+            "binary": "tools/http_plugin",
+            "method": "init"
+        },
+        "0x8001": {
+            "name": "ROUTE_BIND",
+            "type": "plugin",
+            "binary": "tools/http_plugin",
+            "method": "route"
+        },
+        "0x3000": {
+            "name": "EMBED",
+            "type": "plugin",
+            "binary": "tools/ai_plugin",
+            "method": "embed"
+        },
+        "0x3004": {
+            "name": "GENERATE",
+            "type": "plugin",
+            "binary": "tools/ai_plugin",
+            "method": "generate"
+        }
+    },
+    "protocol": {
+        "request": {
+            "format": "JSON via stdin",
+            "schema": {
+                "method": "string",
+                "args": [
+                    "any"
+                ]
+            }
+        },
+        "response": {
+            "format": "JSON via stdout",
+            "schema": {
+                "ok": "bool",
+                "value": "any",
+                "error": "string?"
+            }
+        }
+    }
+}

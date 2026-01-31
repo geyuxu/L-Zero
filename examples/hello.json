@@ -1,0 +1,5 @@
+[
+  { "SETS": { "reg": 1, "val": "Hello, L-0!" } },
+  { "TEXEC": { "tool": 20480, "arg": 1, "dest": 255 } },
+  "HALT"
+]
