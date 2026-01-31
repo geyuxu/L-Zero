@@ -1,0 +1,13 @@
+[package]
+name = "l0_asm"
+version.workspace = true
+edition.workspace = true
+description = "L-0 Assembler - ASM to bytecode compiler"
+
+[[bin]]
+name = "l0asm"
+path = "src/asm.rs"
+
+[dependencies]
+l0_core.workspace = true
+bincode.workspace = true

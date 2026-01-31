@@ -1,0 +1,9 @@
+[package]
+name = "file_plugin"
+version.workspace = true
+edition.workspace = true
+description = "L-0 File Plugin - File operations"
+
+[[bin]]
+name = "file_plugin"
+path = "src/file.rs"

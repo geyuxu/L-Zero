@@ -1,0 +1,15 @@
+[package]
+name = "l0_compiler"
+version.workspace = true
+edition.workspace = true
+description = "L-0 AOT Compiler - Bytecode to C code generator"
+
+[[bin]]
+name = "l0cc"
+path = "src/aot.rs"
+
+[dependencies]
+l0_core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+bincode.workspace = true

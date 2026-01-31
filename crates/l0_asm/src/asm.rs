@@ -1,5 +1,4 @@
-mod lib;
-use lib::Instruction;
+use l0_core::Instruction;
 use std::env;
 use std::fs;
 use std::io::{Read, BufRead, BufReader};
@@ -72,16 +71,9 @@ fn main() {
             // "SETS 1, Hello World" -> args: ["1", "Hello World"]
             // "PANIC Error" -> args: ["Error"]
             
-            // Re-join logic for robustness
+            // State machine parser for proper handling of commas in strings
             let rest = parts[1];
-            let mut arg_list = Vec::new();
-            
-            // Naive split by comma for now.
-            // TODO: Better string parsing if needed.
-            for arg_s in rest.split(',') {
-                 arg_list.push(arg_s.trim().to_string());
-            }
-            arg_list
+            parse_args(rest)
         } else {
             Vec::new()
         };
@@ -150,11 +142,36 @@ fn main() {
             "WRITE" => Instruction::WRITE { ptr: parse_u8(args, 0), offset: parse_usize(args, 1), val: parse_u8(args, 2) },
             
             // Extension
+            "REGEX" => Instruction::REGEX { dest: parse_u8(args, 0), pat: parse_u8(args, 1), text: parse_u8(args, 2) },
             "TEXEC" => Instruction::TEXEC { tool: parse_u16_hex(args, 0), arg: parse_u8(args, 1), dest: parse_u8(args, 2) },
             "ITOA" => Instruction::ITOA { dest: parse_u8(args, 0), src: parse_u8(args, 1) },
             "ATOI" => Instruction::ATOI { dest: parse_u8(args, 0), src: parse_u8(args, 1) },
             "READR" => Instruction::READR { dest: parse_u8(args, 0), ptr: parse_u8(args, 1), off: parse_u8(args, 2) },
             "WRITER" => Instruction::WRITER { ptr: parse_u8(args, 0), off: parse_u8(args, 1), val: parse_u8(args, 2) },
+            "SCAT" => Instruction::SCAT { dest: parse_u8(args, 0), s1: parse_u8(args, 1), s2: parse_u8(args, 2) },
+            "STORE64" => Instruction::STORE64 { ptr: parse_u8(args, 0), off: parse_u8(args, 1), val: parse_u8(args, 2) },
+            "LOAD64" => Instruction::LOAD64 { dest: parse_u8(args, 0), ptr: parse_u8(args, 1), off: parse_u8(args, 2) },
+
+            // Batch Memory Operations
+            "MEMCPY" => Instruction::MEMCPY { dst: parse_u8(args, 0), doff: parse_u8(args, 1), src: parse_u8(args, 2), soff: parse_u8(args, 3), len: parse_u8(args, 4) },
+            "HLEN" => Instruction::HLEN { dest: parse_u8(args, 0), ptr: parse_u8(args, 1) },
+            "SLICE" => Instruction::SLICE { dest: parse_u8(args, 0), ptr: parse_u8(args, 1), off: parse_u8(args, 2), len: parse_u8(args, 3) },
+            "MEMSET" => Instruction::MEMSET { ptr: parse_u8(args, 0), off: parse_u8(args, 1), len: parse_u8(args, 2), val: parse_u8(args, 3) },
+
+            // Vector Operations (Semantic Computing)
+            "VNEW" => Instruction::VNEW { dest: parse_u8(args, 0), dims: parse_u8(args, 1) },
+            "VSET" => Instruction::VSET { vec: parse_u8(args, 0), idx: parse_u8(args, 1), val: parse_u8(args, 2) },
+            "VGET" => Instruction::VGET { dest: parse_u8(args, 0), vec: parse_u8(args, 1), idx: parse_u8(args, 2) },
+            "VDOT" => Instruction::VDOT { dest: parse_u8(args, 0), v1: parse_u8(args, 1), v2: parse_u8(args, 2) },
+            "VSIM" => Instruction::VSIM { dest: parse_u8(args, 0), v1: parse_u8(args, 1), v2: parse_u8(args, 2) },
+            "VMAG" => Instruction::VMAG { dest: parse_u8(args, 0), vec: parse_u8(args, 1) },
+            "VNORM" => Instruction::VNORM { vec: parse_u8(args, 0) },
+
+            // Governance (Semantic Drift Control)
+            "LATCH" => Instruction::LATCH { target: parse_u8(args, 0), threshold: parse_u8(args, 1) },
+            "GUARD" => Instruction::GUARD { state: parse_u8(args, 0) },
+            "TRAP" => Instruction::TRAP { code: parse_u8(args, 0) },
+            "YIELD" => Instruction::YIELD { query: parse_u8(args, 0), dest: parse_u8(args, 1) },
 
             _ => {
                 eprintln!("Error: Unknown Opcode '{}' at line {}", op, raw.line_num);
@@ -174,6 +191,59 @@ fn main() {
 }
 
 // --- Helpers ---
+
+/// State machine parser for argument parsing
+/// Handles commas inside quoted strings: `"Hello, World"` -> preserves comma
+/// Supports escape sequences: `\"` inside strings
+fn parse_args(input: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut in_string = false;
+    let mut escape_next = false;
+
+    for c in input.chars() {
+        if escape_next {
+            // Handle escape sequences
+            match c {
+                'n' => current.push('\n'),
+                'r' => current.push('\r'),
+                't' => current.push('\t'),
+                _ => current.push(c), // \", \\, etc.
+            }
+            escape_next = false;
+            continue;
+        }
+
+        match c {
+            '\\' if in_string => {
+                escape_next = true;
+            }
+            '"' => {
+                in_string = !in_string;
+                // Don't add quotes to output - they're delimiters
+            }
+            ',' if !in_string => {
+                // End of argument
+                let trimmed = current.trim().to_string();
+                if !trimmed.is_empty() {
+                    args.push(trimmed);
+                }
+                current.clear();
+            }
+            _ => {
+                current.push(c);
+            }
+        }
+    }
+
+    // Don't forget the last argument
+    let trimmed = current.trim().to_string();
+    if !trimmed.is_empty() {
+        args.push(trimmed);
+    }
+
+    args
+}
 
 fn parse_u8(args: &[String], idx: usize) -> u8 {
     args.get(idx).expect("Missing Argument").parse().expect("Invalid u8")
@@ -197,10 +267,13 @@ fn parse_usize(args: &[String], idx: usize) -> usize {
 }
 
 fn parse_str(args: &[String], idx: usize) -> String {
-    // Rejoin rest of args to support strings with commas if needed?
-    // For now just take the indexed one and strip quotes
-    let s = args.get(idx).expect("Missing Argument");
-    s.replace("\"", "")
+    // Get string argument - quotes already stripped by parse_args
+    // For SETS, rejoin remaining args if there are multiple (handles unquoted strings with commas)
+    if idx < args.len() {
+        args[idx..].join(", ")
+    } else {
+        panic!("Missing string argument at index {}", idx);
+    }
 }
 
 fn resolve_label(target: &str, labels: &HashMap<String, usize>) -> usize {

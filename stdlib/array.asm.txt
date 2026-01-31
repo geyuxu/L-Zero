@@ -1,0 +1,352 @@
+# L-0 Standard Library: Array Operations
+# =======================================
+# ABI: See stdlib/abi.md
+#
+# IMPORTANT: L-0 has NO indirect jumps. These are INLINE PATTERNS.
+# AI Agents must:
+#   1. Copy the pattern body into their program
+#   2. Rename all labels with unique suffix (e.g., _array_new_1)
+#   3. Pattern ends at _done label (falls through, no return)
+#
+# Arrays are stored as i64 elements using STORE64/LOAD64.
+# Each element is 8 bytes. Array pointer from NEW(size * 8).
+
+# ==================================================================
+# array_new: Create new array
+# ==================================================================
+# Input:  R0 = number of elements
+# Output: R0 = array pointer
+# Clobbers: R4
+# ------------------------------------------------------------------
+array_new:
+    SET 4, 8
+    MUL 4, 0, 4            # R4 = count * 8 (bytes)
+    NEW 0, 4               # R0 = new heap allocation
+array_new_done:
+    # Falls through
+
+# ==================================================================
+# array_get: Get element at index
+# ==================================================================
+# Input:  R0 = array pointer, R1 = index
+# Output: R0 = element value
+# Clobbers: none
+# ------------------------------------------------------------------
+array_get:
+    LOAD64 0, 0, 1         # R0 = arr[R1] (8-byte element)
+array_get_done:
+    # Falls through
+
+# ==================================================================
+# array_set: Set element at index
+# ==================================================================
+# Input:  R0 = array pointer, R1 = index, R2 = value
+# Output: none
+# Clobbers: none
+# ------------------------------------------------------------------
+array_set:
+    STORE64 0, 1, 2        # arr[R1] = R2
+array_set_done:
+    # Falls through
+
+# ==================================================================
+# array_fill: Fill array with value
+# ==================================================================
+# Input:  R0 = array pointer, R1 = length, R2 = value
+# Output: none
+# Clobbers: R4, R5
+# ------------------------------------------------------------------
+array_fill:
+    MOV 4, 0               # R4 = array
+    SET 5, 0               # R5 = index
+
+array_fill_loop:
+    CMP 5, 1
+    BEQ array_fill_done    # index == length, done
+
+    STORE64 4, 5, 2        # arr[i] = value
+    SET 50, 1
+    ADD 5, 5, 50           # i++
+    JMP array_fill_loop
+
+array_fill_done:
+    # Falls through
+
+# ==================================================================
+# array_copy: Copy array
+# ==================================================================
+# Input:  R0 = dest array, R1 = src array, R2 = length
+# Output: none
+# Clobbers: R4, R5, R6
+# ------------------------------------------------------------------
+array_copy:
+    MOV 4, 0               # R4 = dest
+    MOV 5, 1               # R5 = src
+    SET 6, 0               # R6 = index
+
+array_copy_loop:
+    CMP 6, 2
+    BEQ array_copy_done    # index == length, done
+
+    LOAD64 50, 5, 6        # R50 = src[i]
+    STORE64 4, 6, 50       # dest[i] = R50
+    SET 51, 1
+    ADD 6, 6, 51           # i++
+    JMP array_copy_loop
+
+array_copy_done:
+    # Falls through
+
+# ==================================================================
+# array_find: Find element in array
+# ==================================================================
+# Input:  R0 = array pointer, R1 = length, R2 = value to find
+# Output: R0 = index of first occurrence, or -1 if not found
+# Clobbers: R4, R5, R6
+# ------------------------------------------------------------------
+array_find:
+    MOV 4, 0               # R4 = array
+    SET 5, 0               # R5 = index
+
+array_find_loop:
+    CMP 5, 1
+    BEQ array_find_notfound # index == length, not found
+
+    LOAD64 6, 4, 5         # R6 = arr[i]
+    CMP 6, 2
+    BEQ array_find_found
+
+    SET 50, 1
+    ADD 5, 5, 50           # i++
+    JMP array_find_loop
+
+array_find_found:
+    MOV 0, 5               # R0 = index
+    JMP array_find_done
+
+array_find_notfound:
+    SET 0, -1
+array_find_done:
+    # Falls through
+
+# ==================================================================
+# array_sum: Sum all elements
+# ==================================================================
+# Input:  R0 = array pointer, R1 = length
+# Output: R0 = sum of elements
+# Clobbers: R4, R5, R6
+# ------------------------------------------------------------------
+array_sum:
+    MOV 4, 0               # R4 = array
+    SET 5, 0               # R5 = index
+    SET 6, 0               # R6 = sum
+
+array_sum_loop:
+    CMP 5, 1
+    BEQ array_sum_finish   # index == length, done
+
+    LOAD64 50, 4, 5        # R50 = arr[i]
+    ADD 6, 6, 50           # sum += arr[i]
+    SET 51, 1
+    ADD 5, 5, 51           # i++
+    JMP array_sum_loop
+
+array_sum_finish:
+    MOV 0, 6               # R0 = sum
+array_sum_done:
+    # Falls through
+
+# ==================================================================
+# array_min: Find minimum element
+# ==================================================================
+# Input:  R0 = array pointer, R1 = length (must be > 0)
+# Output: R0 = minimum value
+# Clobbers: R4, R5, R6
+# ------------------------------------------------------------------
+array_min:
+    MOV 4, 0               # R4 = array
+    SET 5, 0
+    LOAD64 6, 4, 5         # R6 = arr[0] (initial min)
+    SET 5, 1               # R5 = index (start at 1)
+
+array_min_loop:
+    CMP 5, 1
+    BEQ array_min_finish   # index == length, done
+
+    LOAD64 50, 4, 5        # R50 = arr[i]
+    CMP 50, 6
+    BGT array_min_skip     # arr[i] > min, skip
+    BEQ array_min_skip
+    MOV 6, 50              # new min
+
+array_min_skip:
+    SET 51, 1
+    ADD 5, 5, 51           # i++
+    JMP array_min_loop
+
+array_min_finish:
+    MOV 0, 6               # R0 = min
+array_min_done:
+    # Falls through
+
+# ==================================================================
+# array_max: Find maximum element
+# ==================================================================
+# Input:  R0 = array pointer, R1 = length (must be > 0)
+# Output: R0 = maximum value
+# Clobbers: R4, R5, R6
+# ------------------------------------------------------------------
+array_max:
+    MOV 4, 0               # R4 = array
+    SET 5, 0
+    LOAD64 6, 4, 5         # R6 = arr[0] (initial max)
+    SET 5, 1               # R5 = index (start at 1)
+
+array_max_loop:
+    CMP 5, 1
+    BEQ array_max_finish   # index == length, done
+
+    LOAD64 50, 4, 5        # R50 = arr[i]
+    CMP 50, 6
+    BLT array_max_skip     # arr[i] < max, skip
+    BEQ array_max_skip
+    MOV 6, 50              # new max
+
+array_max_skip:
+    SET 51, 1
+    ADD 5, 5, 51           # i++
+    JMP array_max_loop
+
+array_max_finish:
+    MOV 0, 6               # R0 = max
+array_max_done:
+    # Falls through
+
+# ==================================================================
+# bubble_sort: Sort array (ascending, in-place)
+# ==================================================================
+# Input:  R0 = array pointer, R1 = length
+# Output: none (array sorted in-place)
+# Clobbers: R4, R5, R6, R7, R8, R9
+# ------------------------------------------------------------------
+bubble_sort:
+    MOV 4, 0               # R4 = array
+    MOV 5, 1               # R5 = length
+    SET 50, 1
+    SUB 6, 5, 50           # R6 = length - 1 (outer bound)
+
+bubble_sort_outer:
+    SET 51, 0
+    CMP 6, 51
+    BEQ bubble_sort_done   # outer == 0, done
+
+    SET 7, 0               # R7 = inner index
+    SET 9, 0               # R9 = swapped flag
+
+bubble_sort_inner:
+    CMP 7, 6
+    BEQ bubble_sort_inner_done # inner == outer bound, next pass
+
+    # Compare arr[j] and arr[j+1]
+    LOAD64 50, 4, 7        # R50 = arr[j]
+    SET 51, 1
+    ADD 8, 7, 51           # R8 = j + 1
+    LOAD64 51, 4, 8        # R51 = arr[j+1]
+
+    CMP 50, 51
+    BLT bubble_sort_no_swap # arr[j] < arr[j+1], no swap
+    BEQ bubble_sort_no_swap
+
+    # Swap arr[j] and arr[j+1]
+    STORE64 4, 7, 51       # arr[j] = arr[j+1]
+    STORE64 4, 8, 50       # arr[j+1] = arr[j]
+    SET 9, 1               # swapped = true
+
+bubble_sort_no_swap:
+    SET 52, 1
+    ADD 7, 7, 52           # j++
+    JMP bubble_sort_inner
+
+bubble_sort_inner_done:
+    # Early termination if no swaps
+    SET 51, 0
+    CMP 9, 51
+    BEQ bubble_sort_done   # No swaps = already sorted
+
+    SET 51, 1
+    SUB 6, 6, 51           # outer bound--
+    JMP bubble_sort_outer
+
+bubble_sort_done:
+    # Falls through
+
+# ==================================================================
+# reverse: Reverse array in-place
+# ==================================================================
+# Input:  R0 = array pointer, R1 = length
+# Output: none (array reversed in-place)
+# Clobbers: R4, R5, R6, R7
+# ------------------------------------------------------------------
+reverse:
+    MOV 4, 0               # R4 = array
+    SET 5, 0               # R5 = left index
+    SET 50, 1
+    SUB 6, 1, 50           # R6 = right index (length - 1)
+
+reverse_loop:
+    CMP 5, 6
+    BGT reverse_done       # left > right, done
+    BEQ reverse_done       # left == right, done
+
+    # Swap arr[left] and arr[right]
+    LOAD64 7, 4, 5         # R7 = arr[left]
+    LOAD64 50, 4, 6        # R50 = arr[right]
+    STORE64 4, 5, 50       # arr[left] = arr[right]
+    STORE64 4, 6, 7        # arr[right] = arr[left]
+
+    SET 51, 1
+    ADD 5, 5, 51           # left++
+    SUB 6, 6, 51           # right--
+    JMP reverse_loop
+
+reverse_done:
+    # Falls through
+
+# ==================================================================
+# array_print: Print array (for debugging)
+# ==================================================================
+# Input:  R0 = array pointer, R1 = length
+# Output: none (prints to stdout)
+# Clobbers: R4, R5, R6
+# ------------------------------------------------------------------
+array_print:
+    MOV 4, 0               # R4 = array
+    SET 5, 0               # R5 = index
+
+    SETS 255, "["
+    TEXEC 0x5001, 255, 255 # Print "["
+
+array_print_loop:
+    CMP 5, 1
+    BEQ array_print_finish # index == length, done
+
+    LOAD64 6, 4, 5         # R6 = arr[i]
+    ITOA 255, 6            # Convert to string
+    TEXEC 0x5001, 255, 255 # Print element
+
+    SET 50, 1
+    ADD 5, 5, 50           # i++
+    CMP 5, 1
+    BEQ array_print_no_comma # Last element, no comma
+
+    SETS 255, ", "
+    TEXEC 0x5001, 255, 255 # Print ", "
+
+array_print_no_comma:
+    JMP array_print_loop
+
+array_print_finish:
+    SETS 255, "]"
+    TEXEC 0x5000, 255, 255 # Print "]" with newline
+array_print_done:
+    # Falls through

@@ -1,6 +1,27 @@
+# Build outputs
+/target/
+/bin/
+/out/
+/dist/
+
+# IDE and editor
 .claude/
+.DS_Store
+
+# Cargo lock (workspace)
 Cargo.lock
-bin/
-out/
-target/
-tools/file_plugin
+
+# Runtime config files
+.l0_db_config.json
+.l0_http_config.json
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Compiled bytecode
+*.l0
+
+# Legacy (can be removed after migration cleanup)
+l0_database.json
