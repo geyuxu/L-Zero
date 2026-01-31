@@ -35,6 +35,7 @@ mkdir -p "$DIST_DIR/bin"
 mkdir -p "$DIST_DIR/lib/l0/plugins"
 mkdir -p "$DIST_DIR/config"
 mkdir -p "$DIST_DIR/examples"
+mkdir -p "$DIST_DIR/stdlib"
 
 # Step 3: Copy binaries (dynamically from workspace)
 echo "[3/5] Copying binaries..."
@@ -63,8 +64,8 @@ echo "[4/5] Generating configuration..."
 # Transform: "target/release/xxx_plugin" -> "lib/l0/plugins/xxx_plugin"
 sed 's|"target/release/\([^"]*\)"|"lib/l0/plugins/\1"|g' tools.json > "$DIST_DIR/config/tools.json"
 
-# Step 5: Copy examples and docs
-echo "[5/5] Copying examples and documentation..."
+# Step 5: Copy examples, stdlib, and docs
+echo "[5/5] Copying examples, stdlib, and documentation..."
 
 # Copy all .asm examples from examples/ directory
 for asm in examples/*.asm; do
@@ -73,6 +74,12 @@ for asm in examples/*.asm; do
         echo "  example: $(basename "$asm")"
     fi
 done
+
+# Copy stdlib (pattern library for AI agents)
+if [ -d "stdlib" ]; then
+    cp -r stdlib/* "$DIST_DIR/stdlib/"
+    echo "  stdlib: $(ls stdlib | wc -l | tr -d ' ') files"
+fi
 
 # Install script
 cat > "$DIST_DIR/install.sh" << 'INSTALL_EOF'
@@ -107,6 +114,7 @@ $SUDO cp -r "$SCRIPT_DIR/bin" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/lib" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/config" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/examples" "$PREFIX/"
+$SUDO cp -r "$SCRIPT_DIR/stdlib" "$PREFIX/"
 
 $SUDO chmod +x "$PREFIX/bin/"*
 $SUDO chmod +x "$PREFIX/lib/l0/plugins/"*
