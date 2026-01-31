@@ -7,5 +7,16 @@ tools/file_plugin
 tools/data_plugin
 tools/db_plugin
 tools/http_plugin
+tools/db/target/
+tools/db/.cargo-home/
 l0_database.json
 .DS_Store
+
+# Runtime config files
+.l0_db_config.json
+.l0_http_config.json
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal

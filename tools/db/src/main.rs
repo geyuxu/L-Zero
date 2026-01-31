@@ -7,12 +7,49 @@ use rusqlite::Connection;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::fs;
 use std::io::{self, BufRead, Write};
 use std::sync::Mutex;
+
+// Config file to persist DB path across process invocations
+const DB_CONFIG_PATH: &str = ".l0_db_config.json";
 
 // Global connection (SQLite is not thread-safe by default)
 static DB: Mutex<Option<Connection>> = Mutex::new(None);
 static DB_PATH: Mutex<Option<String>> = Mutex::new(None);
+
+/// Load DB path from config and auto-connect
+fn ensure_connection() -> bool {
+    let db = DB.lock().unwrap();
+    if db.is_some() {
+        return true;
+    }
+    drop(db); // Release lock before reading file
+
+    // Try to load from config file
+    if let Ok(content) = fs::read_to_string(DB_CONFIG_PATH) {
+        if let Ok(config) = serde_json::from_str::<serde_json::Value>(&content) {
+            if let Some(path) = config["path"].as_str() {
+                if let Ok(conn) = Connection::open(path) {
+                    let _ = conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;");
+                    let mut db = DB.lock().unwrap();
+                    *db = Some(conn);
+                    drop(db);
+                    let mut db_path = DB_PATH.lock().unwrap();
+                    *db_path = Some(path.to_string());
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Save DB path to config file
+fn save_db_config(path: &str) {
+    let config = json!({"path": path});
+    let _ = fs::write(DB_CONFIG_PATH, config.to_string());
+}
 
 #[derive(Deserialize)]
 struct Request {
@@ -77,6 +114,9 @@ fn cmd_init(args: &[String]) -> String {
             let mut db_path = DB_PATH.lock().unwrap();
             *db_path = Some(path.to_string());
 
+            // Persist config for future process invocations
+            save_db_config(path);
+
             json!({"ok": true, "value": format!("SQLite connected: {}", path)}).to_string()
         }
         Err(e) => json!({"ok": false, "error": format!("Failed to open database: {}", e)}).to_string(),
@@ -116,6 +156,7 @@ fn cmd_connect(args: &[String]) -> String {
 /// Args: [table_name] or [table_name|column_definitions]
 /// Column definitions: "id INTEGER PRIMARY KEY, name TEXT, age INTEGER"
 fn cmd_create_table(args: &[String]) -> String {
+    ensure_connection();
     let db = DB.lock().unwrap();
     let conn = match db.as_ref() {
         Some(c) => c,
@@ -144,6 +185,7 @@ fn cmd_create_table(args: &[String]) -> String {
 /// Insert data
 /// Args: [table|json_data] or [table|col1,col2|val1,val2]
 fn cmd_insert(args: &[String]) -> String {
+    ensure_connection();
     let db = DB.lock().unwrap();
     let conn = match db.as_ref() {
         Some(c) => c,
@@ -242,6 +284,7 @@ fn cmd_insert(args: &[String]) -> String {
 /// Select data
 /// Args: [table] or [table|condition] or [table|condition|columns]
 fn cmd_select(args: &[String]) -> String {
+    ensure_connection();
     let db = DB.lock().unwrap();
     let conn = match db.as_ref() {
         Some(c) => c,
@@ -274,6 +317,7 @@ fn cmd_select(args: &[String]) -> String {
 /// Update data
 /// Args: [table|condition|json_data] or [table|condition|col=val,col2=val2]
 fn cmd_update(args: &[String]) -> String {
+    ensure_connection();
     let db = DB.lock().unwrap();
     let conn = match db.as_ref() {
         Some(c) => c,
@@ -323,6 +367,7 @@ fn cmd_update(args: &[String]) -> String {
 /// Delete data
 /// Args: [table|condition]
 fn cmd_delete(args: &[String]) -> String {
+    ensure_connection();
     let db = DB.lock().unwrap();
     let conn = match db.as_ref() {
         Some(c) => c,
@@ -354,6 +399,7 @@ fn cmd_delete(args: &[String]) -> String {
 /// Drop table
 /// Args: [table_name]
 fn cmd_drop_table(args: &[String]) -> String {
+    ensure_connection();
     let db = DB.lock().unwrap();
     let conn = match db.as_ref() {
         Some(c) => c,
@@ -375,6 +421,7 @@ fn cmd_drop_table(args: &[String]) -> String {
 
 /// List all tables
 fn cmd_list_tables(_args: &[String]) -> String {
+    ensure_connection();
     let db = DB.lock().unwrap();
     let conn = match db.as_ref() {
         Some(c) => c,
@@ -401,6 +448,7 @@ fn cmd_list_tables(_args: &[String]) -> String {
 /// Execute raw SQL (for DDL/DML)
 /// Args: [sql_statement]
 fn cmd_exec(args: &[String]) -> String {
+    ensure_connection();
     let db = DB.lock().unwrap();
     let conn = match db.as_ref() {
         Some(c) => c,
@@ -421,6 +469,7 @@ fn cmd_exec(args: &[String]) -> String {
 /// Execute raw SQL query (for SELECT)
 /// Args: [sql_query]
 fn cmd_query(args: &[String]) -> String {
+    ensure_connection();
     let db = DB.lock().unwrap();
     let conn = match db.as_ref() {
         Some(c) => c,
