@@ -45,13 +45,20 @@ impl ToolRegistry {
 
     fn load(&mut self) {
         // Build search paths for tools.json
-        // Priority: 1. local, 2. L0_HOME/config, 3. env/tools.json (legacy)
+        // Priority: 1. L0_HOME/config, 2. local, 3. ~/.l0/config, 4. env/ (legacy)
         let mut paths = vec!["tools.json".to_string()];
 
+        // Highest priority: L0_HOME environment variable
         if let Ok(l0_home) = env::var("L0_HOME") {
             paths.insert(0, format!("{}/config/tools.json", l0_home));
         }
 
+        // User home directory fallback: ~/.l0/config/tools.json
+        if let Ok(home) = env::var("HOME") {
+            paths.push(format!("{}/.l0/config/tools.json", home));
+        }
+
+        // Legacy path
         paths.push("env/tools.json".to_string());
 
         for p in &paths {
