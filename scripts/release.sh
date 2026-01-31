@@ -25,18 +25,27 @@ mkdir -p "${DIST_DIR}/lib/l0/plugins"
 mkdir -p "${DIST_DIR}/config"
 mkdir -p "${DIST_DIR}/examples"
 
-# 4. Copy core binaries
+# 4. Copy core binaries (read binary name from each Cargo.toml)
 echo "[4/8] Copying core binaries..."
-cp target/release/l0vm "${DIST_DIR}/bin/"
-cp target/release/l0asm "${DIST_DIR}/bin/"
-cp target/release/l0cc "${DIST_DIR}/bin/"
+for crate in crates/*/; do
+    toml="${crate}Cargo.toml"
+    # Extract binary name from [[bin]] section
+    name=$(grep -A1 '^\[\[bin\]\]' "$toml" 2>/dev/null | grep '^name' | sed 's/.*"\([^"]*\)".*/\1/')
+    if [ -n "$name" ] && [ -f "target/release/$name" ]; then
+        cp "target/release/$name" "${DIST_DIR}/bin/"
+        echo "  - $name"
+    fi
+done
 
-# 5. Copy plugin binaries
+# 5. Copy plugin binaries (from plugins/)
 echo "[5/8] Copying plugins..."
-cp target/release/file_plugin "${DIST_DIR}/lib/l0/plugins/"
-cp target/release/data_plugin "${DIST_DIR}/lib/l0/plugins/"
-cp target/release/http_plugin "${DIST_DIR}/lib/l0/plugins/"
-cp target/release/db_plugin "${DIST_DIR}/lib/l0/plugins/"
+for plugin in plugins/*/; do
+    name=$(basename "$plugin")
+    if [ -f "target/release/$name" ]; then
+        cp "target/release/$name" "${DIST_DIR}/lib/l0/plugins/"
+        echo "  - $name"
+    fi
+done
 
 # 6. Generate production tools.json (transform paths from source)
 echo "[6/8] Generating production config..."

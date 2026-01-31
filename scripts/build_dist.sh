@@ -36,16 +36,27 @@ mkdir -p "$DIST_DIR/lib/l0/plugins"
 mkdir -p "$DIST_DIR/config"
 mkdir -p "$DIST_DIR/examples"
 
-# Step 3: Copy binaries
+# Step 3: Copy binaries (dynamically from workspace)
 echo "[3/5] Copying binaries..."
-cp target/release/l0vm "$DIST_DIR/bin/"
-cp target/release/l0asm "$DIST_DIR/bin/"
-cp target/release/l0cc "$DIST_DIR/bin/"
 
-cp target/release/file_plugin "$DIST_DIR/lib/l0/plugins/"
-cp target/release/data_plugin "$DIST_DIR/lib/l0/plugins/"
-cp target/release/http_plugin "$DIST_DIR/lib/l0/plugins/"
-cp target/release/db_plugin "$DIST_DIR/lib/l0/plugins/"
+# Core binaries from crates/ (read binary name from Cargo.toml)
+for crate in crates/*/; do
+    toml="${crate}Cargo.toml"
+    name=$(grep -A1 '^\[\[bin\]\]' "$toml" 2>/dev/null | grep '^name' | sed 's/.*"\([^"]*\)".*/\1/')
+    if [ -n "$name" ] && [ -f "target/release/$name" ]; then
+        cp "target/release/$name" "$DIST_DIR/bin/"
+        echo "  bin: $name"
+    fi
+done
+
+# Plugins from plugins/
+for plugin in plugins/*/; do
+    name=$(basename "$plugin")
+    if [ -f "target/release/$name" ]; then
+        cp "target/release/$name" "$DIST_DIR/lib/l0/plugins/"
+        echo "  plugin: $name"
+    fi
+done
 
 # Step 4: Generate production tools.json (transform paths from source)
 echo "[4/5] Generating configuration..."
@@ -55,32 +66,13 @@ sed 's|"target/release/\([^"]*\)"|"lib/l0/plugins/\1"|g' tools.json > "$DIST_DIR
 # Step 5: Copy examples and docs
 echo "[5/5] Copying examples and documentation..."
 
-# Hello World example
-cat > "$DIST_DIR/examples/hello_world.asm" << 'ASM_EOF'
-# Hello World - L-0 Assembly
-SETS 1, Hello, L-0!
-TEXEC 0x5000, 1, 255
-HALT
-ASM_EOF
-
-# Loop example
-cat > "$DIST_DIR/examples/count.asm" << 'ASM_EOF'
-# Count 1 to 5
-SET 1, 1       # counter
-SET 2, 6       # limit
-
-Loop:
-CMP 1, 2
-BEQ Done
-ITOA 10, 1
-TEXEC 0x5000, 10, 255
-SET 3, 1
-ADD 1, 1, 3
-JMP Loop
-
-Done:
-HALT
-ASM_EOF
+# Copy all .asm examples from examples/ directory
+for asm in examples/*.asm; do
+    if [ -f "$asm" ]; then
+        cp "$asm" "$DIST_DIR/examples/"
+        echo "  example: $(basename "$asm")"
+    fi
+done
 
 # Install script
 cat > "$DIST_DIR/install.sh" << 'INSTALL_EOF'
