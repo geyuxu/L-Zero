@@ -3,7 +3,7 @@
 L-Zero is a **low-level, structural instruction set** designed specifically for AI generation, not human writing.
 
 Unlike traditional languages that prioritize human readability (syntax sugar, complex parsers), L-Zero prioritizes **Machine Determinism**:
-- **Dual Format**: JSON for debugging/generation, Binary (Bincode) for execution
+- **ASM Source Format**: Assembly with labels - optimal for AI token efficiency and control flow
 - **Type-Safe**: Based on a strict Rust Enum definition, ensuring 100% valid structure
 - **Agentic Extensibility**: Core logic (52 Primitives) with semantic computing; infinite capability via dynamic Tools (Plugins)
 - **AOT Compilation**: Compile to native C code for maximum performance
@@ -19,16 +19,22 @@ cargo build --release
 
 ### 2. Run Examples
 ```bash
-# JSON format (direct execution)
-./target/release/l0vm examples/hello.json
-
-# Assembly format (compile then run)
+# Standard workflow: ASM → Bytecode → Execute
 ./target/release/l0asm examples/bubble_sort.asm > /tmp/out.l0
 ./target/release/l0vm /tmp/out.l0
 
 # AOT compile to native binary
-./target/release/l0cc examples/hello.json -o hello.c
-gcc -O2 hello.c -o hello && ./hello
+./target/release/l0cc /tmp/out.l0 -o program.c
+gcc -O2 program.c -o program && ./program
+```
+
+### 3. For AI Agents
+```
+AI generates .asm file (with labels, comments)
+       ↓
+l0asm compiles to .l0 (validates syntax)
+       ↓
+l0vm executes .l0 (or l0cc for AOT)
 ```
 
 ---
@@ -89,9 +95,15 @@ The language is defined by the `Instruction` enum in `src/lib.rs`:
 
 | Binary | Description |
 |--------|-------------|
-| `l0vm` | Virtual Machine - executes .json or .l0 programs |
+| `l0vm` | Virtual Machine - executes .l0 bytecode |
 | `l0asm`| Assembler - compiles .asm to .l0 bytecode |
-| `l0cc` | AOT Compiler - compiles .l0/.json to C code (with supervisor protocol) |
+| `l0cc` | AOT Compiler - compiles .l0 to C code (with supervisor protocol) |
+
+| Format | Role | AI Generates? |
+|--------|------|---------------|
+| `.asm` | **Source** (labels, comments) | **YES** |
+| `.l0`  | Binary bytecode | No (compiled) |
+| `.c`   | AOT output | No (generated) |
 
 ```
 +-----------+   l0asm   +-----------+   l0vm    +-----------+

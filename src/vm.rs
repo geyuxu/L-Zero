@@ -1008,50 +1008,75 @@ impl VM {
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("Usage: l0vm <program.json> [--debug]");
+        eprintln!("L-0 Virtual Machine v1.0");
+        eprintln!("Usage: l0vm <program.l0> [--debug] [--dev]");
+        eprintln!("");
+        eprintln!("Standard workflow:");
+        eprintln!("  l0asm source.asm > program.l0   # Compile ASM to bytecode");
+        eprintln!("  l0vm program.l0                 # Execute bytecode");
+        eprintln!("");
+        eprintln!("Flags:");
+        eprintln!("  --debug   Trace execution (print each instruction)");
+        eprintln!("  --dev     Allow .json source files (for VM development only)");
+        eprintln!("  --info    Print ISA and tool registry");
         std::process::exit(1);
     }
-    
+
     // Check for --info flag first
     if args.contains(&"--info".to_string()) {
         let mut registry = ToolRegistry::new();
         registry.load();
-        
+
         let mut tools_map = serde_json::Map::new();
         for (id, cfg) in &registry.plugins {
             tools_map.insert(format!("0x{:04X}", id), serde_json::to_value(cfg).unwrap());
         }
 
         let info = serde_json::json!({
-            "version": "0.3.1",
+            "version": "1.0.0",
             "usage": "l0vm <program.l0> [--debug]",
-            "description": "L-Zero Virtual Machine (Binary Bytecode)",
+            "description": "L-Zero Virtual Machine",
+            "source_format": "ASM (.asm) - compile with l0asm",
+            "binary_format": "Bincode (.l0)",
             "architecture": {
-                "format": "Bincode (Rust Binary)",
-                "endianness": "Little Endian (Standard)",
-                "isa_definition": "Enum (Untagged)"
+                "registers": 256,
+                "heap": "Linear memory model",
+                "endianness": "Little Endian"
             },
             "isa": {
                 "primitives": Instruction::introspection()
             },
             "tools": tools_map
         });
-        
+
         println!("{}", serde_json::to_string_pretty(&info).unwrap());
         std::process::exit(0);
     }
 
     let debug = args.iter().any(|a| a == "--debug");
+    let dev_mode = args.iter().any(|a| a == "--dev");
+
     // Find the first argument that is not a flag
     let path = args.iter().skip(1).find(|a| !a.starts_with("--")).expect("No program file specified");
 
-    // Detect format by extension
+    // Load program - prefer binary, JSON only in dev mode
     let program: Vec<Instruction> = if path.ends_with(".json") {
-        // JSON format
+        if !dev_mode {
+            eprintln!("Error: JSON source files are deprecated for production.");
+            eprintln!("Use the assembler workflow:");
+            eprintln!("  1. Write source.asm (with labels)");
+            eprintln!("  2. l0asm source.asm > program.l0");
+            eprintln!("  3. l0vm program.l0");
+            eprintln!("");
+            eprintln!("To load JSON anyway (for VM development), use --dev flag:");
+            eprintln!("  l0vm program.json --dev");
+            std::process::exit(1);
+        }
+        eprintln!("[DEV] Loading JSON source (deprecated format)");
         let content = fs::read_to_string(path).expect("Failed to read JSON file");
         serde_json::from_str(&content).expect("Failed to parse L-Zero JSON program")
     } else {
-        // Binary format (.l0)
+        // Binary format (.l0) - preferred
         let content = fs::read(path).expect("Failed to read binary file");
         bincode::deserialize(&content).expect("Failed to parse L-Zero Binary Bytecode")
     };
