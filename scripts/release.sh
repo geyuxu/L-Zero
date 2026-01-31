@@ -62,26 +62,58 @@ cat > "${DIST_DIR}/install.sh" << 'INSTALL_EOF'
 #!/bin/bash
 set -e
 
-PREFIX="${1:-$HOME/.l0}"
+# Default: user install to ~/.l0
+# System install: ./install.sh --system (installs to /usr/local/l0)
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+
+if [ "$1" = "--system" ] || [ "$1" = "-s" ]; then
+    PREFIX="/usr/local/l0"
+    SYSTEM_INSTALL=true
+    SUDO="sudo"
+    echo "=== System Installation ==="
+else
+    PREFIX="${1:-$HOME/.l0}"
+    SYSTEM_INSTALL=false
+    SUDO=""
+    echo "=== User Installation ==="
+fi
 
 echo "Installing L-0 to: $PREFIX"
 
-mkdir -p "$PREFIX"
-cp -r "$SCRIPT_DIR/bin" "$PREFIX/"
-cp -r "$SCRIPT_DIR/lib" "$PREFIX/"
-cp -r "$SCRIPT_DIR/config" "$PREFIX/"
-cp -r "$SCRIPT_DIR/examples" "$PREFIX/"
+# Create directories and copy files
+$SUDO mkdir -p "$PREFIX"
+$SUDO cp -r "$SCRIPT_DIR/bin" "$PREFIX/"
+$SUDO cp -r "$SCRIPT_DIR/lib" "$PREFIX/"
+$SUDO cp -r "$SCRIPT_DIR/config" "$PREFIX/"
+$SUDO cp -r "$SCRIPT_DIR/examples" "$PREFIX/"
 
-chmod +x "$PREFIX/bin/"*
-chmod +x "$PREFIX/lib/l0/plugins/"*
+$SUDO chmod +x "$PREFIX/bin/"*
+$SUDO chmod +x "$PREFIX/lib/l0/plugins/"*
 
-echo ""
-echo "Add to your shell profile:"
-echo "  export L0_HOME=\"$PREFIX\""
-echo "  export PATH=\"\$L0_HOME/bin:\$PATH\""
-echo ""
-echo "Then run: l0vm --info"
+# System install: create symlinks in /usr/local/bin
+if [ "$SYSTEM_INSTALL" = true ]; then
+    echo "Creating symlinks in /usr/local/bin..."
+    for bin in "$PREFIX/bin/"*; do
+        name=$(basename "$bin")
+        $SUDO ln -sf "$bin" "/usr/local/bin/$name"
+        echo "  /usr/local/bin/$name -> $bin"
+    done
+
+    echo ""
+    echo "Installation complete!"
+    echo "Add to your shell profile:"
+    echo "  export L0_HOME=$PREFIX"
+    echo ""
+    echo "Binaries are available globally. Try: l0vm --info"
+else
+    echo ""
+    echo "Installation complete!"
+    echo "Add to your shell profile (~/.bashrc or ~/.zshrc):"
+    echo "  export L0_HOME=\"$PREFIX\""
+    echo "  export PATH=\"\$L0_HOME/bin:\$PATH\""
+    echo ""
+    echo "Then run: l0vm --info"
+fi
 INSTALL_EOF
 chmod +x "${DIST_DIR}/install.sh"
 

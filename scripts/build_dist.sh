@@ -80,46 +80,61 @@ cat > "$DIST_DIR/install.sh" << 'INSTALL_EOF'
 set -e
 
 # L-0 Installation Script
+# Usage:
+#   ./install.sh              # User install to ~/.l0
+#   ./install.sh /custom/path # Install to custom path
+#   ./install.sh --system     # System install to /usr/local/l0
 
-PREFIX="${1:-$HOME/.l0}"
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
-echo "=== L-0 Installation ==="
+if [ "$1" = "--system" ] || [ "$1" = "-s" ]; then
+    PREFIX="/usr/local/l0"
+    SYSTEM_INSTALL=true
+    SUDO="sudo"
+    echo "=== L-0 System Installation ==="
+else
+    PREFIX="${1:-$HOME/.l0}"
+    SYSTEM_INSTALL=false
+    SUDO=""
+    echo "=== L-0 User Installation ==="
+fi
+
 echo "Installing to: $PREFIX"
-echo ""
 
-# Create installation directory
-mkdir -p "$PREFIX"
+# Create directories and copy files
+$SUDO mkdir -p "$PREFIX"
+$SUDO cp -r "$SCRIPT_DIR/bin" "$PREFIX/"
+$SUDO cp -r "$SCRIPT_DIR/lib" "$PREFIX/"
+$SUDO cp -r "$SCRIPT_DIR/config" "$PREFIX/"
+$SUDO cp -r "$SCRIPT_DIR/examples" "$PREFIX/"
 
-# Copy all files
-cp -r "$SCRIPT_DIR/bin" "$PREFIX/"
-cp -r "$SCRIPT_DIR/lib" "$PREFIX/"
-cp -r "$SCRIPT_DIR/config" "$PREFIX/"
-cp -r "$SCRIPT_DIR/examples" "$PREFIX/"
+$SUDO chmod +x "$PREFIX/bin/"*
+$SUDO chmod +x "$PREFIX/lib/l0/plugins/"*
 
-# Make binaries executable
-chmod +x "$PREFIX/bin/"*
-chmod +x "$PREFIX/lib/l0/plugins/"*
+if [ "$SYSTEM_INSTALL" = true ]; then
+    # Create symlinks in /usr/local/bin
+    echo "Creating symlinks in /usr/local/bin..."
+    for bin in "$PREFIX/bin/"*; do
+        name=$(basename "$bin")
+        $SUDO ln -sf "$bin" "/usr/local/bin/$name"
+        echo "  /usr/local/bin/$name -> $bin"
+    done
 
-# Generate shell profile additions
-PROFILE_ADDITIONS="
-# L-0 Language
-export L0_HOME=\"$PREFIX\"
-export PATH=\"\$L0_HOME/bin:\$PATH\"
-"
-
-echo "Installation complete!"
-echo ""
-echo "Add the following to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
-echo "----------------------------------------"
-echo "$PROFILE_ADDITIONS"
-echo "----------------------------------------"
-echo ""
-echo "Then reload your shell or run:"
-echo "  source ~/.bashrc  # or ~/.zshrc"
-echo ""
-echo "Verify installation:"
-echo "  l0vm --info"
+    echo ""
+    echo "Installation complete!"
+    echo "Set L0_HOME in your shell profile:"
+    echo "  export L0_HOME=$PREFIX"
+    echo ""
+    echo "Binaries are globally available. Try: l0vm --info"
+else
+    echo ""
+    echo "Installation complete!"
+    echo "Add to your shell profile (~/.bashrc or ~/.zshrc):"
+    echo "  export L0_HOME=\"$PREFIX\""
+    echo "  export PATH=\"\$L0_HOME/bin:\$PATH\""
+    echo ""
+    echo "Then run: l0vm --info"
+fi
 INSTALL_EOF
 chmod +x "$DIST_DIR/install.sh"
 
@@ -132,15 +147,27 @@ L-0 is a low-level instruction set designed for AI agents.
 ## Quick Install
 
 ```bash
-./install.sh              # Install to ~/.l0 (default)
-./install.sh /opt/l0      # Install to custom path
+# User installation (recommended)
+./install.sh              # Install to ~/.l0
+
+# System installation (requires sudo)
+./install.sh --system     # Install to /usr/local/l0
+
+# Custom path
+./install.sh /opt/l0
 ```
 
-After installation, add to your shell profile:
-
+### User Installation
+Add to your shell profile (~/.bashrc or ~/.zshrc):
 ```bash
 export L0_HOME="$HOME/.l0"
 export PATH="$L0_HOME/bin:$PATH"
+```
+
+### System Installation
+Binaries are symlinked to /usr/local/bin. Just set:
+```bash
+export L0_HOME="/usr/local/l0"
 ```
 
 ## Usage
