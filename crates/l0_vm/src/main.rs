@@ -31,15 +31,29 @@ struct ToolRegistry {
 
 impl ToolRegistry {
     fn new() -> Self {
+        // Check L0_HOME environment variable first, fallback to current directory
+        let l0_home = env::var("L0_HOME").ok();
+        let env_dir = l0_home.clone().unwrap_or_else(||
+            env::current_dir().unwrap().to_str().unwrap().to_string()
+        );
+
         ToolRegistry {
             plugins: HashMap::new(),
-            env_dir: env::current_dir().unwrap().to_str().unwrap().to_string(),
+            env_dir,
         }
     }
 
     fn load(&mut self) {
-        // Try local tools.json
-        let paths = ["tools.json", "env/tools.json"];
+        // Build search paths for tools.json
+        // Priority: 1. local, 2. L0_HOME/config, 3. env/tools.json (legacy)
+        let mut paths = vec!["tools.json".to_string()];
+
+        if let Ok(l0_home) = env::var("L0_HOME") {
+            paths.insert(0, format!("{}/config/tools.json", l0_home));
+        }
+
+        paths.push("env/tools.json".to_string());
+
         for p in &paths {
             if Path::new(p).exists() {
                  if let Ok(content) = fs::read_to_string(p) {
@@ -48,13 +62,18 @@ impl ToolRegistry {
                              if let Some(plugins) = json.get(section) {
                                  if let Some(obj) = plugins.as_object() {
                                      for (k, v) in obj {
+                                         // Skip metadata fields (start with $)
+                                         if k.starts_with('$') {
+                                             continue;
+                                         }
+
                                          // Parse Hex Key "0x1234"
                                          let id = if k.starts_with("0x") {
                                              u16::from_str_radix(&k[2..], 16).unwrap_or(0)
                                          } else {
                                              k.parse().unwrap_or(0)
                                          };
-                                         
+
                                          if let Ok(cfg) = serde_json::from_value::<PluginConfig>(v.clone()) {
                                              self.plugins.insert(id, cfg);
                                          } else {
@@ -273,10 +292,20 @@ impl VM {
     // Execute External Plugin
     fn call_plugin(&self, plugin: &PluginConfig, arg: &str) -> String {
         if let (Some(binary), Some(method)) = (&plugin.binary, &plugin.method) {
+             // Search for plugin binary in order:
+             // 1. Absolute path (as-is)
+             // 2. Relative to L0_HOME (if set)
+             // 3. Relative to current directory
              let bin_path = if Path::new(binary).exists() {
                  binary.to_string()
              } else {
-                 format!("{}/{}", self.registry.env_dir, binary)
+                 let l0_path = format!("{}/{}", self.registry.env_dir, binary);
+                 if Path::new(&l0_path).exists() {
+                     l0_path
+                 } else {
+                     // Fallback: try current directory
+                     binary.to_string()
+                 }
              };
 
              // Escape special characters in argument for JSON

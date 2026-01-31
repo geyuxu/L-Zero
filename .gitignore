@@ -2,6 +2,7 @@
 /target/
 /bin/
 /out/
+/dist/
 
 # IDE and editor
 .claude/
