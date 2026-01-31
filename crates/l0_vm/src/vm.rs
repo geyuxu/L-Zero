@@ -533,10 +533,11 @@ impl VM {
                 Instruction::HALT => self.halted = true,
                 Instruction::PANIC(msg) => { eprintln!("PANIC: {}", msg); std::process::exit(1); },
                 Instruction::DUMP => {
-                    println!("--- VM DUMP ---");
-                    println!("Regs[0-15]: {:?}", &self.registers[0..16]);
-                    println!("Regs[10-25]: {:?}", &self.registers[10..26]);
-                    println!("Linear Heap: {} allocations, {} bytes used",
+                    // Output to stderr to avoid interfering with governance protocol
+                    eprintln!("--- VM DUMP ---");
+                    eprintln!("Regs[0-15]: {:?}", &self.registers[0..16]);
+                    eprintln!("Regs[10-25]: {:?}", &self.registers[10..26]);
+                    eprintln!("Linear Heap: {} allocations, {} bytes used",
                              self.heap.allocations.len(), self.heap.bump);
                     for (ptr, alloc) in &self.heap.allocations {
                         if alloc.used {
@@ -547,7 +548,7 @@ impl VM {
                             } else {
                                 preview.to_string()
                             };
-                            println!("  [ptr={}]: \"{}\" ({} bytes @ offset {})",
+                            eprintln!("  [ptr={}]: \"{}\" ({} bytes @ offset {})",
                                      ptr, truncated, alloc.size, alloc.offset);
                         }
                     }
@@ -952,6 +953,8 @@ impl VM {
                         println!("{}", serde_json::to_string(&context).unwrap());
 
                         // Wait for supervisor input
+                        // TODO: Add timeout mechanism to prevent deadlock if supervisor hangs
+                        // For v1.0, blocking wait is acceptable
                         let mut input = String::new();
                         eprintln!("[GOVERNANCE] Awaiting supervisor response (JSON)...");
                         if std::io::stdin().read_line(&mut input).is_ok() {

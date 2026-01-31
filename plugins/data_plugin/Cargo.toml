@@ -6,4 +6,4 @@ description = "L-0 Data Plugin - JSON operations"
 
 [[bin]]
 name = "data_plugin"
-path = "src/main.rs"
+path = "src/data.rs"

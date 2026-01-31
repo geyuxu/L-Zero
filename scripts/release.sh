@@ -56,6 +56,7 @@ sed 's|"target/release/\([^"]*\)"|"lib/l0/plugins/\1"|g' tools.json > "${DIST_DI
 # 7. Copy documentation, examples, and stdlib
 echo "[7/8] Copying docs, examples, and stdlib..."
 cp README.md "${DIST_DIR}/"
+cp BOOT.md "${DIST_DIR}/" 2>/dev/null || true
 cp -r examples/*.asm "${DIST_DIR}/examples/" 2>/dev/null || true
 cp -r stdlib/* "${DIST_DIR}/stdlib/" 2>/dev/null || true
 
@@ -89,6 +90,7 @@ $SUDO cp -r "$SCRIPT_DIR/lib" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/config" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/examples" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/stdlib" "$PREFIX/"
+[ -f "$SCRIPT_DIR/BOOT.md" ] && $SUDO cp "$SCRIPT_DIR/BOOT.md" "$PREFIX/"
 
 $SUDO chmod +x "$PREFIX/bin/"*
 $SUDO chmod +x "$PREFIX/lib/l0/plugins/"*

@@ -6,4 +6,4 @@ description = "L-0 File Plugin - File operations"
 
 [[bin]]
 name = "file_plugin"
-path = "src/main.rs"
+path = "src/file.rs"

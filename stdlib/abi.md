@@ -45,21 +45,50 @@ ITOA 255, 0
 TEXEC 0x5000, 255, 0   # Print result
 ```
 
-### Label Uniqueness Rule
+### Caller-Save Responsibility
 
-When copying a pattern multiple times, append a unique suffix:
+**CRITICAL**: Before pasting a pattern, move any live data from R0-R9 to R10-R49.
+
+Patterns WILL overwrite R0-R9 without warning. If you have important data in these registers, save it first:
 
 ```asm
-# First usage of fibonacci
-fib_1_loop:
-fib_1_zero:
-fib_1_done:
+# Save important data before calling fibonacci
+MOV 20, 5              # Save R5 (important) -> R20 (local)
+MOV 21, 6              # Save R6 (important) -> R21 (local)
 
-# Second usage of fibonacci
-fib_2_loop:
-fib_2_zero:
-fib_2_done:
+# Now safe to inline pattern
+SET 0, 10              # Input for fibonacci
+# ---- BEGIN fibonacci ----
+# ... pattern will clobber R4-R9 ...
+# ---- END fibonacci ----
+
+# Restore if needed
+MOV 5, 20
+MOV 6, 21
 ```
+
+### Label Hygiene (Collision Prevention)
+
+When copying patterns, use **hash/UUID suffixes** instead of simple numbers.
+This prevents collisions in long programs with thousands of lines:
+
+```asm
+# BAD - collision risk in long programs
+fib_1_loop:
+fib_2_loop:
+
+# GOOD - unique hash suffix
+fib_a7b9_loop:
+fib_c3d2_loop:
+
+# BEST - include context in suffix
+calc_total_fib_loop:
+print_result_fib_loop:
+```
+
+Recommended suffix formats:
+- `pattern_<4-char-hash>_label` (e.g., `fib_a7b9_done`)
+- `<context>_pattern_label` (e.g., `main_fib_done`)
 
 ### Argument Convention
 
@@ -121,6 +150,48 @@ Array:  i64 elements via STORE64/LOAD64 (8 bytes each)
 | R0 = 0    | Success / false           |
 | R0 > 0    | Success with value / true |
 
+### Standard Error Check Pattern (CHECK_ERR)
+
+After any pattern that may fail, use this standard check:
+
+```asm
+# ---- CHECK_ERR pattern ----
+# Input: R0 = result from previous operation
+# Jumps to error handler if R0 < 0
+SET 50, 0                      # R50 = 0 (zero constant)
+CMP 0, 50                      # Compare R0 with 0
+BLT handle_error_<suffix>      # If R0 < 0, jump to error
+# ---- END CHECK_ERR ----
+```
+
+Example usage:
+
+```asm
+# Try to find element
+SET 0, 5                       # needle
+# ---- inline array_find ----
+# ...
+array_find_abc1_done:
+# ---- end array_find ----
+
+# Check for error
+SET 50, 0
+CMP 0, 50
+BLT not_found_abc1             # R0 < 0 means not found
+
+# Success path
+ITOA 255, 0
+TEXEC 0x5000, 255, 0           # Print index
+JMP done_abc1
+
+not_found_abc1:
+SETS 255, "Element not found"
+TEXEC 0x5000, 255, 0
+
+done_abc1:
+HALT
+```
+
 ## Tool IDs (TEXEC)
 
 | ID       | Name    | Description            |
@@ -138,9 +209,27 @@ Array:  i64 elements via STORE64/LOAD64 (8 bytes each)
 
 1. **Parse user request** → Identify needed patterns
 2. **Read stdlib files** → Copy relevant patterns
-3. **Rename labels** → Add unique suffix (_1, _2, etc.)
-4. **Wire together** → Set inputs, inline pattern, use outputs
-5. **Generate .asm** → Self-contained, no external dependencies
+3. **Save live registers** → Move R0-R9 data to R10-R49 if needed
+4. **Rename labels** → Use hash suffix (e.g., `_a7b9`) to prevent collisions
+5. **Wire inputs** → Set R0-R3 with pattern arguments
+6. **Inline pattern** → Copy pattern body with renamed labels
+7. **Check errors** → Use CHECK_ERR pattern if operation may fail
+8. **Generate .asm** → Self-contained, no external dependencies
+
+### Quick Reference Card
+
+```
+Before Pattern:  MOV 20, 5         # Save R5 → R20 if needed
+                 SET 0, <input>    # Set input in R0
+
+Inline Pattern:  # ---- BEGIN pattern_<hash> ----
+                 # (copy and rename all labels)
+                 # ---- END pattern ----
+
+After Pattern:   SET 50, 0         # CHECK_ERR
+                 CMP 0, 50
+                 BLT error_<hash>
+```
 
 ---
 

@@ -6,7 +6,7 @@ description = "L-0 Database Plugin - SQLite backend"
 
 [[bin]]
 name = "db_plugin"
-path = "src/main.rs"
+path = "src/db.rs"
 
 [dependencies]
 rusqlite.workspace = true

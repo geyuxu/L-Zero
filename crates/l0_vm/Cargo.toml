@@ -6,7 +6,7 @@ description = "L-0 Virtual Machine"
 
 [[bin]]
 name = "l0vm"
-path = "src/main.rs"
+path = "src/vm.rs"
 
 [dependencies]
 l0_core.workspace = true

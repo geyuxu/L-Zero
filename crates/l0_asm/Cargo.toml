@@ -6,7 +6,7 @@ description = "L-0 Assembler - ASM to bytecode compiler"
 
 [[bin]]
 name = "l0asm"
-path = "src/main.rs"
+path = "src/asm.rs"
 
 [dependencies]
 l0_core.workspace = true

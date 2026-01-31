@@ -6,7 +6,7 @@ description = "L-0 HTTP Plugin - HTTP server"
 
 [[bin]]
 name = "http_plugin"
-path = "src/main.rs"
+path = "src/http.rs"
 
 [dependencies]
 serde.workspace = true

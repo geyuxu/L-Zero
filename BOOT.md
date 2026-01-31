@@ -785,8 +785,20 @@ Or use the build script:
 **Important Notes:**
 - TEXEC always returns a heap pointer to a string. Use ATOI to convert numeric results.
 - WRITE/READ store u8 values (0-255). Use STORE64/LOAD64 for full i64.
-- ASM format uses comma as argument separator. For strings containing commas, use JSON format.
 - Use ISA instructions (HLEN, SCAT) over deprecated builtins (STRLEN, CONCAT).
+
+**Output Channels:**
+| Output Type | Channel | Purpose |
+|-------------|---------|---------|
+| PRINT (user) | stdout | Program output |
+| DUMP | stderr | Debugging (won't interfere with protocol) |
+| Governance JSON | stdout | Supervisor communication |
+| VM logs `[GOVERNANCE]` | stderr | Internal diagnostics |
+
+**String Parsing in ASM:**
+- Quoted strings preserve commas: `SETS 1, "Hello, World"` → single string argument
+- Escape sequences supported: `\n` (newline), `\t` (tab), `\"` (quote), `\\` (backslash)
+- Example: `SETS 1, "He said \"Hello\" to me"` works correctly
 
 ---
 
@@ -854,6 +866,8 @@ for line in sys.stdin:
 | set_registers | ✅ Supported | ✅ Supported |
 | jump | ✅ Supported | ⚠️ Limited (C labels) |
 | abort | ✅ Supported | ✅ exit(code) |
+
+**Known Limitation (v1.0):** TRAP/GUARD/YIELD use blocking stdin reads. If supervisor hangs, VM will deadlock. Future versions may add timeout or heartbeat mechanism.
 
 ---
 

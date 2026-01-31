@@ -81,6 +81,12 @@ if [ -d "stdlib" ]; then
     echo "  stdlib: $(ls stdlib | wc -l | tr -d ' ') files"
 fi
 
+# Copy documentation
+if [ -f "BOOT.md" ]; then
+    cp BOOT.md "$DIST_DIR/"
+    echo "  doc: BOOT.md"
+fi
+
 # Install script
 cat > "$DIST_DIR/install.sh" << 'INSTALL_EOF'
 #!/bin/bash
@@ -115,6 +121,7 @@ $SUDO cp -r "$SCRIPT_DIR/lib" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/config" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/examples" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/stdlib" "$PREFIX/"
+[ -f "$SCRIPT_DIR/BOOT.md" ] && $SUDO cp "$SCRIPT_DIR/BOOT.md" "$PREFIX/"
 
 $SUDO chmod +x "$PREFIX/bin/"*
 $SUDO chmod +x "$PREFIX/lib/l0/plugins/"*
@@ -211,7 +218,8 @@ Plugins are located in `lib/l0/plugins/`:
 
 ## Documentation
 
-For full documentation, visit: https://github.com/geyuxu/ai-programming-lang
+- **BOOT.md** - Full ISA reference, tool registry, and programming guide (included)
+- Online: https://github.com/geyuxu/ai-programming-lang
 
 ## License
 

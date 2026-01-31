@@ -6,7 +6,7 @@ description = "L-0 AOT Compiler - Bytecode to C code generator"
 
 [[bin]]
 name = "l0cc"
-path = "src/main.rs"
+path = "src/aot.rs"
 
 [dependencies]
 l0_core.workspace = true
