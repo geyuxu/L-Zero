@@ -46,7 +46,7 @@ gcc -O2 program.c -o program        # Compile to native
 | ------------------------------------------------------------- |
 | - Register-based operations, compiled into VM                 |
 | - Fast, direct execution                                      |
-| - Defined in lib.rs                                           |
+| - Defined in crates/l0_core/src/lib.rs                        |
 +---------------------------------------------------------------+
                               |
                               | TEXEC 0x5xxx
@@ -56,7 +56,7 @@ gcc -O2 program.c -o program        # Compile to native
 | ------------------------------------------------------------- |
 | - String-based I/O, no external process                       |
 | - PRINT, INPUT, RAND, TIME, UPPER, LOWER, etc.               |
-| - Implemented in vm.rs                                        |
+| - Implemented in crates/l0_vm/src/main.rs                     |
 +---------------------------------------------------------------+
                               |
                               | TEXEC 0x3xxx-0x9xxx
@@ -747,7 +747,7 @@ Add tools without recompiling. Edit `tools.json`:
     "0x7000": {
       "name": "MY_TOOL",
       "type": "plugin",
-      "binary": "tools/my_plugin",
+      "binary": "target/release/my_plugin",
       "method": "run"
     }
   }
@@ -763,17 +763,21 @@ Plugin Protocol (stdin/stdout JSON-RPC):
 ## Build
 
 ```bash
-cargo build --release
+cargo build --release --workspace
 ```
 
 Binaries output to `target/release/`:
 - `l0vm` - Virtual Machine
 - `l0asm` - Assembler
 - `l0cc` - AOT Compiler
+- `file_plugin` - File I/O plugin
+- `data_plugin` - JSON plugin
+- `http_plugin` - HTTP server plugin
+- `db_plugin` - SQLite database plugin
 
-Build plugins:
+Or use the build script:
 ```bash
-cd tools && cargo build --release
+./scripts/build_release.sh
 ```
 
 ---

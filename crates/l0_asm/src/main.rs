@@ -1,5 +1,4 @@
-mod lib;
-use lib::Instruction;
+use l0_core::Instruction;
 use std::env;
 use std::fs;
 use std::io::{Read, BufRead, BufReader};

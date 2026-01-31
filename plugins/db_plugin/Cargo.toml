@@ -1,0 +1,18 @@
+[package]
+name = "db_plugin"
+version.workspace = true
+edition.workspace = true
+description = "L-0 Database Plugin - SQLite backend"
+
+[[bin]]
+name = "db_plugin"
+path = "src/main.rs"
+
+[dependencies]
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[profile.release]
+opt-level = 3
+lto = true

@@ -14,7 +14,7 @@ Unlike traditional languages that prioritize human readability (syntax sugar, co
 
 ### 1. Build
 ```bash
-cargo build --release
+cargo build --release --workspace
 ```
 
 ### 2. Run Examples
@@ -75,7 +75,7 @@ L-Zero v1.0 adopts a **Three-Layer Architecture**:
 
 ### 1. The ISA (52 Instructions)
 
-The language is defined by the `Instruction` enum in `src/lib.rs`:
+The language is defined by the `Instruction` enum in `crates/l0_core/src/lib.rs`:
 
 | Category | Instructions | Description |
 |----------|--------------|-------------|
@@ -278,20 +278,23 @@ Both VM and AOT-compiled binaries support the same supervisor protocol for gover
 
 ```
 .
-├── src/                # Rust Source
-│   ├── lib.rs          # ISA Definition (52 instructions)
-│   ├── vm.rs           # Virtual Machine
-│   ├── asm.rs          # Assembler
-│   └── compiler.rs     # AOT Compiler
-├── tools/              # Plugins (Rust source)
-│   ├── file_plugin.rs
-│   ├── db_plugin.rs
-│   ├── data_plugin.rs
-│   └── http_plugin.rs
-├── tools.json          # Tool Registry (40+ tools)
-├── examples/           # Example & Test Programs
-├── BOOT.md             # Detailed documentation
-└── README.md           # This file
+├── Cargo.toml              # Workspace configuration
+├── crates/                 # Core components
+│   ├── l0_core/            # ISA Definition (52 instructions)
+│   ├── l0_vm/              # Virtual Machine
+│   ├── l0_asm/             # Assembler
+│   └── l0_compiler/        # AOT Compiler
+├── plugins/                # External plugins
+│   ├── file_plugin/        # File I/O operations
+│   ├── data_plugin/        # JSON operations
+│   ├── http_plugin/        # HTTP server
+│   └── db_plugin/          # SQLite database
+├── tools.json              # Tool Registry (40+ tools)
+├── examples/               # Example programs
+├── stdlib/                 # Standard library patterns
+├── scripts/                # Build scripts
+├── BOOT.md                 # Detailed documentation
+└── README.md               # This file
 ```
 
 ## Introspection

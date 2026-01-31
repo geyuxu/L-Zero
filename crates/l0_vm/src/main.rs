@@ -1,5 +1,4 @@
-mod lib;
-use lib::*;
+use l0_core::*;
 use std::env;
 use std::collections::HashMap;
 use std::fs;

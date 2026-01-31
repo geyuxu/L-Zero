@@ -4,8 +4,7 @@
 // 编译: cargo build --release --bin l0cc
 // 用法: l0cc program.l0 -o program.c && gcc -O2 program.c -o program
 
-mod lib;
-use lib::*;
+use l0_core::*;
 use std::env;
 use std::fs;
 use std::collections::HashMap;

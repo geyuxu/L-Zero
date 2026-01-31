@@ -1,0 +1,8 @@
+[package]
+name = "l0_core"
+version.workspace = true
+edition.workspace = true
+description = "L-0 Language Core - ISA definitions and instruction set"
+
+[dependencies]
+serde.workspace = true
