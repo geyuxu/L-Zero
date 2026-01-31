@@ -152,5 +152,8 @@ define_isa! {
     READR { dest: u8, ptr: u8, off: u8 },
 
     /// Write with register offset: heap[R[ptr]][R[off]] = R[val]
-    WRITER { ptr: u8, off: u8, val: u8 }
+    WRITER { ptr: u8, off: u8, val: u8 },
+
+    /// String concatenation: R[dest] = R[s1] + R[s2]
+    SCAT { dest: u8, s1: u8, s2: u8 }
 }

@@ -192,12 +192,13 @@ Use `l0vm --info` to see all instruction signatures and ordinals.
 | READR | dest, ptr, off | R[dest] = heap[R[ptr]][R[off]] (dynamic offset) |
 | WRITER | ptr, off, val | heap[R[ptr]][R[off]] = R[val] (dynamic offset) |
 
-**Tool Execution**
+**Tool Execution & Strings**
 | Op | Args | Description |
 |----|------|-------------|
 | TEXEC | tool, arg, dest | Call tool with heap[R[arg]], store result ptr in R[dest] |
 | ITOA | dest, src | R[dest] = str(R[src]) - integer to string |
 | ATOI | dest, src | R[dest] = int(R[src]) - string to integer (0 on error) |
+| SCAT | dest, s1, s2 | R[dest] = R[s1] + R[s2] - string concatenation |
 
 ### TEXEC Workflow
 
@@ -206,11 +207,61 @@ Use `l0vm --info` to see all instruction signatures and ordinals.
 3. Result string pointer stored in R[dest]
 
 Tool IDs from `--info`:
-- `0x5000` (20480): PRINT - prints string with newline
-- `0x5001` (20481): PRINTN - prints string without newline (for compact output)
-- `0x5002` (20482): INPUT - reads line from stdin, returns trimmed string
-- `0x1004` (4100): POW - computes power, returns result string
-- Plugins: FILE_READ, DB_SELECT, etc.
+
+**I/O Tools**
+| ID | Name | Description |
+|----|------|-------------|
+| `0x5000` | PRINT | prints string with newline |
+| `0x5001` | PRINTN | prints string without newline |
+| `0x5002` | INPUT | reads line from stdin, returns trimmed string |
+
+**Math Tools**
+| ID | Name | Args | Description |
+|----|------|------|-------------|
+| `0x1004` | POW | "base,exp" | returns base^exp |
+| `0x5005` | ABS | "n" | returns absolute value |
+| `0x5006` | MIN | "a,b" | returns min(a,b) |
+| `0x5007` | MAX | "a,b" | returns max(a,b) |
+| `0x5003` | RAND | "max" | returns random 0..max |
+
+**String Tools**
+| ID | Name | Args | Description |
+|----|------|------|-------------|
+| `0x5004` | STRLEN | "str" | returns string length |
+| `0x5009` | CONCAT | "s1,s2" | returns s1+s2 |
+| `0x500A` | SUBSTR | "str,start,len" | returns substring |
+| `0x500B` | SPLIT | "str,delim,idx" | returns element at index after split |
+| `0x500C` | UPPER | "str" | returns uppercase |
+| `0x500D` | LOWER | "str" | returns lowercase |
+| `0x500E` | TRIM | "str" | returns trimmed string |
+
+**System Tools**
+| ID | Name | Description |
+|----|------|-------------|
+| `0x5008` | TIME | returns current unix timestamp (seconds)
+
+**Plugins**: FILE_READ, FILE_WRITE, DB_SELECT, etc.
+
+---
+
+## Test Suite
+
+Run the comprehensive test suite:
+```bash
+./examples/run_tests.sh
+```
+
+Test files in `examples/`:
+| File | Tests |
+|------|-------|
+| `test_basic.asm` | SET, MOV, SWAP, SETS, ITOA, ATOI |
+| `test_math.asm` | ADD, SUB, MUL, DIV, MOD, AND, OR, XOR, NOT |
+| `test_memory.asm` | NEW, FREE, READ, WRITE, READR, WRITER |
+| `test_control.asm` | JMP, BEQ, BGT, BLT, loops |
+| `test_string.asm` | STRLEN, UPPER, LOWER, TRIM, SCAT |
+| `test_tools.asm` | PRINT, ABS, RAND, TIME |
+| `test_tools_advanced.json` | POW, MIN, MAX (requires comma in args) |
+| `test_all.asm` | Comprehensive suite (17 tests) |
 
 ---
 
@@ -360,9 +411,24 @@ ATOI 3, 2             # r3 = parsed integer
 ```asm
 NEW 1, 10             # r1 = array base
 SET 2, 5              # r2 = index
-SET 3, 42             # r3 = value
+SET 3, 42             # r3 = value (note: truncated to u8: 0-255)
 WRITER 1, 2, 3        # arr[5] = 42
 READR 4, 1, 2         # r4 = arr[5]
+```
+
+**String Concatenation:**
+```asm
+SETS 1, Hello
+SETS 2, World
+SCAT 3, 1, 2          # r3 = "HelloWorld"
+TEXEC 0x5000, 3, 0    # prints "HelloWorld"
+```
+
+**TEXEC Returns String (use ATOI for numbers):**
+```asm
+SETS 1, -42
+TEXEC 0x5005, 1, 2    # ABS returns string "42" in r2
+ATOI 3, 2             # r3 = 42 (integer)
 ```
 
 ---
@@ -432,5 +498,10 @@ examples/       # Example Programs
 ```
 
 ---
+
+**Important Notes:**
+- TEXEC always returns a heap pointer to a string. Use ATOI to convert numeric results.
+- WRITE/READ store u8 values (0-255). Larger values are truncated (mod 256).
+- ASM format uses comma as argument separator. For strings containing commas, use JSON format.
 
 *L-0 v0.3.1 | Assembly + Bytecode | Protocol-First Architecture*

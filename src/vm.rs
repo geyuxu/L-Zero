@@ -460,6 +460,19 @@ impl VM {
                         }
                     }
                 },
+                Instruction::SCAT { dest, s1, s2 } => {
+                    let ptr1 = self.registers[*s1 as usize] as usize;
+                    let ptr2 = self.registers[*s2 as usize] as usize;
+                    let str1 = if let Some(Some(d)) = self.heap.get(ptr1) {
+                        String::from_utf8_lossy(d).to_string()
+                    } else { "".to_string() };
+                    let str2 = if let Some(Some(d)) = self.heap.get(ptr2) {
+                        String::from_utf8_lossy(d).to_string()
+                    } else { "".to_string() };
+                    let result = format!("{}{}", str1, str2);
+                    let ptr = self.heap_alloc(result.as_bytes().to_vec());
+                    self.registers[*dest as usize] = ptr;
+                },
                 _ => {}
          }
     }

@@ -155,6 +155,7 @@ fn main() {
             "ATOI" => Instruction::ATOI { dest: parse_u8(args, 0), src: parse_u8(args, 1) },
             "READR" => Instruction::READR { dest: parse_u8(args, 0), ptr: parse_u8(args, 1), off: parse_u8(args, 2) },
             "WRITER" => Instruction::WRITER { ptr: parse_u8(args, 0), off: parse_u8(args, 1), val: parse_u8(args, 2) },
+            "SCAT" => Instruction::SCAT { dest: parse_u8(args, 0), s1: parse_u8(args, 1), s2: parse_u8(args, 2) },
 
             _ => {
                 eprintln!("Error: Unknown Opcode '{}' at line {}", op, raw.line_num);
