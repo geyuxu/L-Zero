@@ -352,8 +352,20 @@ fn cmd_update(args: &[String]) -> String {
             Err(e) => return json!({"ok": false, "error": format!("Invalid JSON: {}", e)}).to_string(),
         }
     } else {
-        // col=val format
-        data_str.to_string()
+        // col=val format - properly quote values
+        data_str.split(',')
+            .filter_map(|pair| {
+                let parts: Vec<&str> = pair.splitn(2, '=').collect();
+                if parts.len() == 2 {
+                    let col = parts[0].trim();
+                    let val = parts[1].trim().replace("'", "''"); // Escape single quotes
+                    Some(format!("{} = '{}'", col, val))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
     };
 
     let sql = format!("UPDATE {} SET {} WHERE {}", table, set_clause, condition);

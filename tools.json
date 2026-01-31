@@ -89,6 +89,8 @@
         "0x8003": { "name": "HTTP_SERVE_ONCE", "type": "plugin", "binary": "tools/http_plugin", "method": "serve_once" },
         "0x8004": { "name": "HTTP_REQUEST", "type": "plugin", "binary": "tools/http_plugin", "method": "request" },
         "0x8005": { "name": "HTTP_LIST_ROUTES", "type": "plugin", "binary": "tools/http_plugin", "method": "list_routes" },
+        "0x8006": { "name": "HTTP_STATIC", "type": "plugin", "binary": "tools/http_plugin", "method": "static", "desc": "Set static file directory" },
+        "0x8007": { "name": "HTTP_DB", "type": "plugin", "binary": "tools/http_plugin", "method": "db", "desc": "Set database path for CRUD operations" },
 
         "0x3000": { "name": "AI_EMBED", "type": "plugin", "binary": "tools/ai_plugin", "method": "embed", "note": "Optional" },
         "0x3004": { "name": "AI_GENERATE", "type": "plugin", "binary": "tools/ai_plugin", "method": "generate", "note": "Optional" }

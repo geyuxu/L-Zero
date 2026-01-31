@@ -20,3 +20,5 @@ l0_database.json
 *.db
 *.db-shm
 *.db-wal
+
+*.l0

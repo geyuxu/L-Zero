@@ -25,8 +25,16 @@ fn handle_request(request: &str) -> String {
         "read" => {
             if let Some(path) = args.get(0) {
                 match fs::read_to_string(path) {
-                    Ok(content) => format!(r#"{{"ok":true,"value":"{}"}}"#,
-                        content.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")),
+                    Ok(content) => {
+                        // Properly escape for JSON string
+                        let escaped = content
+                            .replace('\\', "\\\\")
+                            .replace('"', "\\\"")
+                            .replace('\n', "\\n")
+                            .replace('\r', "\\r")
+                            .replace('\t', "\\t");
+                        format!(r#"{{"ok":true,"value":"{}"}}"#, escaped)
+                    },
                     Err(e) => format!(r#"{{"ok":false,"error":"{}"}}"#, e),
                 }
             } else {
@@ -35,13 +43,23 @@ fn handle_request(request: &str) -> String {
         }
 
         "write" => {
-            if args.len() >= 2 {
-                match fs::write(&args[0], &args[1]) {
-                    Ok(_) => r#"{"ok":true,"value":true}"#.to_string(),
-                    Err(e) => format!(r#"{{"ok":false,"error":"{}"}}"#, e),
+            // Format: either args[0]=path, args[1]=content OR args[0]="path|content"
+            let (path, content) = if args.len() >= 2 {
+                (args[0].clone(), args[1].clone())
+            } else if let Some(arg) = args.get(0) {
+                // Split on first "|" separator
+                if let Some(pos) = arg.find('|') {
+                    (arg[..pos].to_string(), arg[pos+1..].to_string())
+                } else {
+                    return r#"{"ok":false,"error":"missing content (use path|content format)"}"#.to_string();
                 }
             } else {
-                r#"{"ok":false,"error":"missing path or content"}"#.to_string()
+                return r#"{"ok":false,"error":"missing path or content"}"#.to_string();
+            };
+
+            match fs::write(&path, &content) {
+                Ok(_) => r#"{"ok":true,"value":true}"#.to_string(),
+                Err(e) => format!(r#"{{"ok":false,"error":"{}"}}"#, e),
             }
         }
 
@@ -87,6 +105,15 @@ fn handle_request(request: &str) -> String {
 }
 
 fn extract_string(json: &str, key: &str) -> String {
+    // Try with space: "key": "value"
+    let pattern_space = format!("\"{}\": \"", key);
+    if let Some(start) = json.find(&pattern_space) {
+        let rest = &json[start + pattern_space.len()..];
+        if let Some(end) = rest.find('"') {
+            return rest[..end].to_string();
+        }
+    }
+    // Try without space: "key":"value"
     let pattern = format!("\"{}\":\"", key);
     if let Some(start) = json.find(&pattern) {
         let rest = &json[start + pattern.len()..];
@@ -100,37 +127,59 @@ fn extract_string(json: &str, key: &str) -> String {
 fn extract_args(json: &str) -> Vec<String> {
     let mut args = Vec::new();
 
-    if let Some(start) = json.find("\"args\":[") {
-        let rest = &json[start + 8..];
-        if let Some(end) = rest.find(']') {
-            let args_str = &rest[..end];
+    // Try with space: "args": [
+    let (start_opt, offset) = if let Some(start) = json.find("\"args\": [") {
+        (Some(start), 9)
+    } else if let Some(start) = json.find("\"args\":[") {
+        (Some(start), 8)
+    } else {
+        (None, 0)
+    };
 
-            // 简单解析字符串数组
-            let mut in_string = false;
-            let mut current = String::new();
-            let mut chars = args_str.chars().peekable();
+    if let Some(start) = start_opt {
+        let rest = &json[start + offset..];
 
-            while let Some(c) = chars.next() {
+        // Parse args array, properly handling strings with escaped characters
+        let mut in_string = false;
+        let mut current = String::new();
+        let mut chars = rest.chars().peekable();
+        let mut escape_next = false;
+
+        while let Some(c) = chars.next() {
+            if escape_next {
+                // Handle JSON escape sequences
                 match c {
-                    '"' if !in_string => {
-                        in_string = true;
-                    }
-                    '"' if in_string => {
-                        in_string = false;
-                        args.push(current.clone());
-                        current.clear();
-                    }
-                    '\\' if in_string => {
-                        if let Some(&next) = chars.peek() {
-                            chars.next();
-                            current.push(next);
-                        }
-                    }
-                    _ if in_string => {
-                        current.push(c);
-                    }
-                    _ => {}
+                    'n' => current.push('\n'),
+                    'r' => current.push('\r'),
+                    't' => current.push('\t'),
+                    '\\' => current.push('\\'),
+                    '"' => current.push('"'),
+                    _ => current.push(c),
                 }
+                escape_next = false;
+                continue;
+            }
+
+            match c {
+                '\\' if in_string => {
+                    escape_next = true;
+                }
+                '"' if !in_string => {
+                    in_string = true;
+                }
+                '"' if in_string => {
+                    in_string = false;
+                    args.push(current.clone());
+                    current.clear();
+                }
+                ']' if !in_string => {
+                    // End of args array
+                    break;
+                }
+                _ if in_string => {
+                    current.push(c);
+                }
+                _ => {}
             }
         }
     }
