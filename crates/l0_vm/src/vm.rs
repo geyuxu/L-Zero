@@ -4,12 +4,31 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::io::{Write, BufRead, BufReader};
+use std::io::{Write, BufRead, BufReader, ErrorKind};
 use serde_json::Value;
 
 // ============================================================================
 // L-0 VM v0.2
 // ============================================================================
+
+/// Safe print to stdout - ignores BrokenPipe errors (common in piped/server scenarios)
+fn safe_println(s: &str) {
+    if let Err(e) = writeln!(std::io::stdout(), "{}", s) {
+        if e.kind() != ErrorKind::BrokenPipe {
+            eprintln!("[VM] stdout write error: {}", e);
+        }
+        // Silently ignore BrokenPipe - this is normal when output is piped and closed
+    }
+}
+
+fn safe_print(s: &str) {
+    if let Err(e) = write!(std::io::stdout(), "{}", s) {
+        if e.kind() != ErrorKind::BrokenPipe {
+            eprintln!("[VM] stdout write error: {}", e);
+        }
+    }
+    let _ = std::io::stdout().flush();
+}
 
 use serde::{Serialize, Deserialize};
 
@@ -396,13 +415,11 @@ impl VM {
                              // It's a builtin check by name below
                              match tool_name {
                                 "PRINT" => {
-                                    println!("{}", arg_str);
+                                    safe_println(&arg_str);
                                     "".to_string()
                                 },
                                 "PRINTN" => {
-                                    use std::io::Write;
-                                    print!("{}", arg_str);
-                                    std::io::stdout().flush().unwrap_or(());
+                                    safe_print(&arg_str);
                                     "".to_string()
                                 },
                                 "INPUT" => {
@@ -950,7 +967,7 @@ impl VM {
                                 "R243_last_sim": self.registers[243]
                             }
                         });
-                        println!("{}", serde_json::to_string(&context).unwrap());
+                        safe_println(&serde_json::to_string(&context).unwrap());
 
                         // Wait for supervisor input
                         // TODO: Add timeout mechanism to prevent deadlock if supervisor hangs
@@ -987,7 +1004,7 @@ impl VM {
                         "registers_0_15": &self.registers[0..16],
                         "last_similarity": self.registers[243]
                     });
-                    println!("{}", serde_json::to_string(&context).unwrap());
+                    safe_println(&serde_json::to_string(&context).unwrap());
 
                     // Wait for supervisor
                     let mut input = String::new();
@@ -1027,7 +1044,7 @@ impl VM {
                         "pc": self.pc,
                         "last_similarity": self.registers[243]
                     });
-                    println!("{}", serde_json::to_string(&request).unwrap());
+                    safe_println(&serde_json::to_string(&request).unwrap());
 
                     // Wait for response
                     let mut input = String::new();
@@ -1087,7 +1104,7 @@ fn main() {
             "tools": tools_map
         });
 
-        println!("{}", serde_json::to_string_pretty(&info).unwrap());
+        safe_println(&serde_json::to_string_pretty(&info).unwrap());
         std::process::exit(0);
     }
 

@@ -500,11 +500,15 @@ AcceptCode:
 | ID | Name | Description |
 |----|------|-------------|
 | `0x8000` | HTTP_INIT | Initialize HTTP server |
-| `0x8001` | HTTP_ROUTE | Register route |
+| `0x8001` | HTTP_ROUTE | Register static route |
 | `0x8002` | HTTP_SERVE | Start server (blocking) |
 | `0x8003` | HTTP_SERVE_ONCE | Handle one request |
 | `0x8004` | HTTP_REQUEST | Make HTTP request |
 | `0x8005` | HTTP_LIST_ROUTES | List registered routes |
+| `0x8006` | HTTP_STATIC | Set static file directory |
+| `0x8007` | HTTP_DB | Set database path for /api/* CRUD |
+| `0x8008` | HTTP_LISTEN | Wait for request, return {method, path, body, addr} |
+| `0x8009` | HTTP_SEND | Send response for pending request |
 
 **AI (0x3xxx)** - Optional
 | ID | Name | Description |
@@ -945,6 +949,173 @@ HALT
 4. **Wire inputs** → Set R0-R3 before pattern
 5. **Use outputs** → R0 contains result after `_done`
 6. **Generate .asm** → Self-contained, no dependencies
+
+---
+
+## Known Limitations & Best Practices
+
+### HTTP Plugin
+
+| Issue | Description | Solution |
+|-------|-------------|----------|
+| Route Priority | Registered routes have highest priority, then `/api/*` auto-CRUD | Use `HTTP_ROUTE` for custom responses, `/api/*` for automatic DB CRUD |
+| Dynamic Updates | Routes can be updated at runtime | Call `HTTP_ROUTE` again with same path to update content |
+| Port Reuse | TCP TIME_WAIT may prevent immediate port reuse | Wait ~30s or use different port |
+| Static vs Dynamic | `HTTP_ROUTE` registers static content only | Use `HTTP_LISTEN` + `HTTP_SEND` for dynamic responses |
+
+**HTTP Modes Comparison:**
+
+| Mode | Tools | Use Case |
+|------|-------|----------|
+| Static | HTTP_ROUTE + HTTP_SERVE | Pre-defined responses, simple sites |
+| Auto-CRUD | HTTP_DB + HTTP_SERVE | Automatic REST API from database |
+| Dynamic | HTTP_LISTEN + HTTP_SEND | Compute response per-request |
+
+**Best Practice - Static HTTP Server:**
+```asm
+# 1. Initialize
+SETS 255, "8080"
+TEXEC 0x8000, 255, 0   # HTTP_INIT
+
+# 2. Set DB path (for /api/* auto-CRUD)
+SETS 255, "app.db"
+TEXEC 0x8007, 255, 0   # HTTP_DB
+
+# 3. Register static routes
+SETS 255, "GET /|<html>Welcome</html>"
+TEXEC 0x8001, 255, 0   # HTTP_ROUTE
+
+# 4. Serve (blocks)
+SETS 255, "100"        # Max requests
+TEXEC 0x8002, 255, 0   # HTTP_SERVE
+```
+
+**Best Practice - Dynamic HTTP Server:**
+```asm
+# Dynamic mode: compute response per request
+# Architecture: daemon server + file-based IPC
+
+# 1. Initialize
+SETS 255, "8080"
+TEXEC 0x8000, 255, 0   # HTTP_INIT
+
+RequestLoop:
+    # 2. Wait for request (starts daemon if needed, blocks until request)
+    SETS 255, ""
+    TEXEC 0x8008, 255, 0   # HTTP_LISTEN
+    # R0 = {"method":"GET","path":"/api/data","body":"...","addr":"..."}
+
+    # 3. Process request (parse path, query DB, compute result)
+    # ... your logic here ...
+    # Build response in R10
+
+    # 4. Send response
+    TEXEC 0x8009, 10, 0    # HTTP_SEND
+
+    JMP RequestLoop
+```
+
+**Dynamic Mode Details:**
+- `HTTP_LISTEN` (0x8008): Starts a background daemon server (if not running), then blocks until a request arrives. Returns JSON: `{method, path, body, addr}`
+- `HTTP_SEND` (0x8009): Sends the response to the pending client. The daemon picks up the response and completes the HTTP transaction.
+- Daemon runs in background, persists across plugin calls
+- Stop daemon: Use `stop_dynamic` method (internal)
+
+### Database Plugin
+
+| Issue | Description | Solution |
+|-------|-------------|----------|
+| Connection Persistence | DB connection persists via config file | No action needed, auto-reconnects |
+| Insert Format | Supports both `table|cols|vals` and `table|{json}` | Use JSON format for complex data |
+| DELETE Syntax | Format is `table|condition` | Example: `articles|id=5` |
+
+**Best Practice - CRUD Sequence:**
+```asm
+# Initialize
+SETS 255, "data.db"
+TEXEC 0x9000, 255, 0   # DB_INIT
+
+# Create table
+SETS 255, "items|id INTEGER PRIMARY KEY,name TEXT,value INTEGER"
+TEXEC 0x9001, 255, 0   # DB_CREATE_TABLE
+
+# Insert (pipe format)
+SETS 255, "items|name,value|Widget,100"
+TEXEC 0x9002, 255, 0   # DB_INSERT
+
+# Insert (JSON format)
+SETS 255, "items|{\"name\":\"Gadget\",\"value\":200}"
+TEXEC 0x9002, 255, 0   # DB_INSERT
+
+# Select all
+SETS 255, "items"
+TEXEC 0x9003, 255, 0   # DB_SELECT -> R0 = JSON array
+
+# Select with condition
+SETS 255, "items|value>150"
+TEXEC 0x9003, 255, 0   # DB_SELECT
+
+# Update
+SETS 255, "items|id=1|value=150"
+TEXEC 0x9004, 255, 0   # DB_UPDATE
+
+# Delete
+SETS 255, "items|id=2"
+TEXEC 0x9005, 255, 0   # DB_DELETE
+```
+
+### Control Flow
+
+| Issue | Description | Solution |
+|-------|-------------|----------|
+| No Indirect Jumps | L-0 has no CALL/RET instructions | Inline all code, use unique label suffixes |
+| Fall-through | Code after handler may fall into next handler | Always end handlers with `JMP` to loop or `HALT` |
+| Label Collision | Same labels in inlined patterns collide | Use unique suffixes: `_1`, `_2`, or hash `_a7b9` |
+
+**Best Practice - Handler Pattern:**
+```asm
+MainLoop:
+    # ... dispatch logic ...
+    CMP 5, 6
+    BEQ HandleA
+    CMP 5, 7
+    BEQ HandleB
+    JMP MainLoop
+
+HandleA:
+    # ... handler code ...
+    JMP MainLoop         # CRITICAL: Jump back!
+
+HandleB:
+    # ... handler code ...
+    JMP MainLoop         # CRITICAL: Jump back!
+```
+
+### Governance Protocol
+
+| Issue | Description | Solution |
+|-------|-------------|----------|
+| Blocking I/O | TRAP/GUARD/YIELD block on stdin | Ensure supervisor responds; no timeout in v1.0 |
+| JSON Format | Supervisor must respond with valid JSON | Use `{"action":"continue"}` or `{"action":"abort"}` |
+
+### String Handling
+
+| Issue | Description | Solution |
+|-------|-------------|----------|
+| Escape Sequences | SETS handles `\n`, `\t`, `\"`, `\\` | Use escapes for special characters |
+| Comma in Strings | Commas in SETS work correctly | Parser handles quoted strings with commas |
+| Max Length | Heap allocation has no hard limit | Very large strings may impact performance |
+
+### Running Tests
+
+```bash
+# Run plugin edge case tests
+./test/test_plugins.sh
+
+# Manual verification
+./target/release/l0vm program.l0 --debug   # Trace execution
+./target/release/l0vm --info               # Show ISA and tools
+```
 
 ---
 

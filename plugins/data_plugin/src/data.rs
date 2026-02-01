@@ -203,6 +203,7 @@ fn extract_string(json: &str, key: &str) -> String {
 fn extract_args(json: &str) -> Vec<String> {
     let mut args = Vec::new();
 
+    // Try with space: "args": [
     let (start_pos, offset) = if let Some(pos) = json.find("\"args\": [") {
         (Some(pos), 9)
     } else if let Some(pos) = json.find("\"args\":[") {
@@ -213,39 +214,48 @@ fn extract_args(json: &str) -> Vec<String> {
 
     if let Some(start) = start_pos {
         let rest = &json[start + offset..];
-        if let Some(end) = rest.find(']') {
-            let args_str = &rest[..end];
 
-            let mut in_string = false;
-            let mut current = String::new();
-            let mut chars = args_str.chars().peekable();
+        // Parse args array, properly handling strings with brackets
+        let mut in_string = false;
+        let mut current = String::new();
+        let mut chars = rest.chars().peekable();
+        let mut escape_next = false;
 
-            while let Some(c) = chars.next() {
+        while let Some(c) = chars.next() {
+            if escape_next {
+                // Handle JSON escape sequences
                 match c {
-                    '"' if !in_string => {
-                        in_string = true;
-                    }
-                    '"' if in_string => {
-                        in_string = false;
-                        args.push(current.clone());
-                        current.clear();
-                    }
-                    '\\' if in_string => {
-                        if let Some(&next) = chars.peek() {
-                            chars.next();
-                            match next {
-                                'n' => current.push('\n'),
-                                'r' => current.push('\r'),
-                                't' => current.push('\t'),
-                                _ => current.push(next),
-                            }
-                        }
-                    }
-                    _ if in_string => {
-                        current.push(c);
-                    }
-                    _ => {}
+                    'n' => current.push('\n'),
+                    'r' => current.push('\r'),
+                    't' => current.push('\t'),
+                    '\\' => current.push('\\'),
+                    '"' => current.push('"'),
+                    _ => current.push(c),
                 }
+                escape_next = false;
+                continue;
+            }
+
+            match c {
+                '\\' if in_string => {
+                    escape_next = true;
+                }
+                '"' if !in_string => {
+                    in_string = true;
+                }
+                '"' if in_string => {
+                    in_string = false;
+                    args.push(current.clone());
+                    current.clear();
+                }
+                ']' if !in_string => {
+                    // End of args array - only break when NOT inside a string
+                    break;
+                }
+                _ if in_string => {
+                    current.push(c);
+                }
+                _ => {}
             }
         }
     }

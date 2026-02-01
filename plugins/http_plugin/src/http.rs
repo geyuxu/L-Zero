@@ -1,5 +1,5 @@
-// L-0 HTTP Plugin v2.0
-// 支持: 静态文件、表单处理、数据库 CRUD API
+// L-0 HTTP Plugin v3.0
+// 支持: 静态文件、表单处理、数据库 CRUD API、动态响应模式
 // 编译: rustc -O http_plugin.rs -o http_plugin
 
 use std::fs;
@@ -9,8 +9,13 @@ use std::collections::HashMap;
 use std::time::Duration;
 use std::process::{Command, Stdio};
 
+extern crate libc;
+
 // 配置文件路径
 const CONFIG_PATH: &str = ".l0_http_config.json";
+// 动态模式 - 请求/响应通过文件传递
+const PENDING_REQUEST_PATH: &str = ".l0_http_pending_request.json";
+const PENDING_RESPONSE_PATH: &str = ".l0_http_pending_response.json";
 
 fn main() {
     let stdin = io::stdin();
@@ -30,8 +35,10 @@ fn handle_request(request: &str) -> String {
     match method.as_str() {
         "init" => {
             let port = args.get(0).map(|s| s.as_str()).unwrap_or("8080");
-            let config = format!(r#"{{"port":{},"routes":{{}},"static_dir":"","db_path":""}}"#, port);
-            if let Err(e) = fs::write(CONFIG_PATH, &config) {
+            // Load existing config to preserve routes, or create new if not exists
+            let mut config = load_config();
+            config.insert("port".to_string(), port.to_string());
+            if let Err(e) = save_config(&config) {
                 return format!(r#"{{"ok":false,"error":"{}"}}"#, e);
             }
             format!(r#"{{"ok":true,"value":"HTTP server configured on port {}"}}"#, port)
@@ -66,21 +73,25 @@ fn handle_request(request: &str) -> String {
                 if let Some(idx) = arg.find('|') {
                     (arg[..idx].to_string(), arg[idx+1..].to_string())
                 } else {
-                    return r#"{"ok":false,"error":"usage: route 'METHOD /path|response_content'"}"#.to_string();
+                    return r#"{"ok":false,"error":"Missing '|' separator in route","usage":"METHOD /path|response_content","examples":["GET /api/data|{\"result\":\"ok\"}","GET /|<html>Welcome</html>"]}"#.to_string();
                 }
             } else {
-                return r#"{"ok":false,"error":"usage: route 'METHOD /path|response_content'"}"#.to_string();
+                return r#"{"ok":false,"error":"Missing route argument","usage":"METHOD /path|response_content","examples":["GET /api/data|{\"result\":\"ok\"}","POST /submit|{\"status\":\"received\"}"]}"#.to_string();
             };
 
             if !route_spec.is_empty() {
+                // Validate route format
+                if !route_spec.contains(' ') {
+                    return format!(r#"{{"ok":false,"error":"Invalid route format - missing space between METHOD and path","got":"{}","usage":"METHOD /path|content","examples":["GET /api/test|ok","POST /data|received"]}}"#, escape_json(&route_spec));
+                }
                 let mut config = load_config();
                 config.insert(route_spec.clone(), response_content.clone());
                 if let Err(e) = save_config(&config) {
-                    return format!(r#"{{"ok":false,"error":"{}"}}"#, e);
+                    return format!(r#"{{"ok":false,"error":"Failed to save route: {}"}}"#, e);
                 }
                 format!(r#"{{"ok":true,"value":"route {} registered"}}"#, escape_json(&route_spec))
             } else {
-                r#"{"ok":false,"error":"usage: route 'METHOD /path' response_content"}"#.to_string()
+                r#"{"ok":false,"error":"Empty route specification","usage":"METHOD /path|response_content"}"#.to_string()
             }
         }
 
@@ -106,7 +117,14 @@ fn handle_request(request: &str) -> String {
                     }
                     format!(r#"{{"ok":true,"value":"served {} requests"}}"#, count)
                 }
-                Err(e) => format!(r#"{{"ok":false,"error":"{}"}}"#, e),
+                Err(e) => {
+                    let hint = if e.to_string().contains("Address already in use") {
+                        format!(r#","hint":"Port {} is busy. Wait ~30s for TCP TIME_WAIT or use HTTP_INIT to change port.""#, port)
+                    } else {
+                        String::new()
+                    };
+                    format!(r#"{{"ok":false,"error":"Failed to bind port {}: {}"{}}}"#, port, e, hint)
+                }
             }
         }
 
@@ -151,6 +169,167 @@ fn handle_request(request: &str) -> String {
             format!(r#"{{"ok":true,"value":[{}]}}"#, routes.join(","))
         }
 
+        // ========== Dynamic Response Mode ==========
+        // Architecture: Daemon server + file-based IPC
+        // 1. HTTP_LISTEN starts daemon if needed, then polls for requests
+        // 2. Daemon: accepts connection -> writes request file -> waits for response file -> sends
+        // 3. HTTP_SEND writes response file for daemon to pick up
+
+        "listen" => {
+            let port = get_port();
+
+            // Clean up old files
+            let _ = fs::remove_file(PENDING_REQUEST_PATH);
+            let _ = fs::remove_file(PENDING_RESPONSE_PATH);
+
+            // Start daemon server if not running
+            let pid_file = "/tmp/l0_http_daemon.pid";
+            let daemon_running = if let Ok(pid_str) = fs::read_to_string(pid_file) {
+                // Check if process is actually running
+                if let Ok(pid) = pid_str.trim().parse::<i32>() {
+                    unsafe { libc::kill(pid, 0) == 0 }
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
+            if !daemon_running {
+                // Start daemon: this process forks and the child runs the server loop
+                match unsafe { libc::fork() } {
+                    -1 => return r#"{"ok":false,"error":"Fork failed"}"#.to_string(),
+                    0 => {
+                        // Child process - become daemon
+                        unsafe { libc::setsid() }; // New session
+
+                        // Write our PID
+                        let pid = unsafe { libc::getpid() };
+                        let _ = fs::write(pid_file, pid.to_string());
+
+                        // Start server loop
+                        if let Ok(listener) = TcpListener::bind(format!("127.0.0.1:{}", port)) {
+                            listener.set_nonblocking(false).ok();
+
+                            loop {
+                                match listener.accept() {
+                                    Ok((mut stream, addr)) => {
+                                        // Read request
+                                        let mut buffer = [0; 16384];
+                                        stream.set_read_timeout(Some(Duration::from_secs(30))).ok();
+
+                                        let bytes_read = stream.read(&mut buffer).unwrap_or(0);
+                                        let request = String::from_utf8_lossy(&buffer[..bytes_read]).to_string();
+
+                                        // Parse request
+                                        let first_line = request.lines().next().unwrap_or("");
+                                        let parts: Vec<&str> = first_line.split_whitespace().collect();
+                                        let (method, path) = if parts.len() >= 2 {
+                                            (parts[0], parts[1])
+                                        } else {
+                                            ("GET", "/")
+                                        };
+
+                                        let body = get_request_body(&request);
+
+                                        // Write request info for VM to read
+                                        let request_json = format!(
+                                            r#"{{"method":"{}","path":"{}","body":"{}","addr":"{}"}}"#,
+                                            method,
+                                            escape_json(path),
+                                            escape_json(&body),
+                                            addr
+                                        );
+                                        let _ = fs::write(PENDING_REQUEST_PATH, &request_json);
+
+                                        // Wait for response (up to 60 seconds)
+                                        let mut responded = false;
+                                        for _ in 0..600 {
+                                            if let Ok(content) = fs::read_to_string(PENDING_RESPONSE_PATH) {
+                                                let content_type = if content.starts_with('[') || content.starts_with('{') {
+                                                    "application/json"
+                                                } else if content.contains("<html") {
+                                                    "text/html"
+                                                } else {
+                                                    "text/plain"
+                                                };
+
+                                                let http_response = format!(
+                                                    "HTTP/1.1 200 OK\r\nContent-Type: {}; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                                                    content_type, content.len(), content
+                                                );
+
+                                                let _ = stream.write_all(http_response.as_bytes());
+                                                let _ = stream.flush();
+                                                let _ = fs::remove_file(PENDING_RESPONSE_PATH);
+                                                responded = true;
+                                                break;
+                                            }
+                                            std::thread::sleep(Duration::from_millis(100));
+                                        }
+
+                                        if !responded {
+                                            let timeout_response = "HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 15\r\n\r\nRequest timeout";
+                                            let _ = stream.write_all(timeout_response.as_bytes());
+                                        }
+
+                                        // Clean up request file
+                                        let _ = fs::remove_file(PENDING_REQUEST_PATH);
+                                    }
+                                    Err(_) => {
+                                        std::thread::sleep(Duration::from_millis(100));
+                                    }
+                                }
+                            }
+                        }
+                        std::process::exit(0);
+                    }
+                    _ => {
+                        // Parent - give daemon time to start
+                        std::thread::sleep(Duration::from_millis(200));
+                    }
+                }
+            }
+
+            // Poll for pending request (up to 60 seconds)
+            for _ in 0..600 {
+                if let Ok(request_json) = fs::read_to_string(PENDING_REQUEST_PATH) {
+                    return format!(r#"{{"ok":true,"value":{}}}"#, request_json);
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+
+            r#"{"ok":false,"error":"Timeout waiting for request"}"#.to_string()
+        }
+
+        "send" => {
+            // Send response for the pending request
+            let content = args.get(0).map(|s| s.as_str()).unwrap_or("");
+
+            if content.is_empty() {
+                return r#"{"ok":false,"error":"Missing response content","usage":"send content"}"#.to_string();
+            }
+
+            // Write response to file for the daemon to pick up
+            match fs::write(PENDING_RESPONSE_PATH, content) {
+                Ok(_) => r#"{"ok":true,"value":"response sent"}"#.to_string(),
+                Err(e) => format!(r#"{{"ok":false,"error":"Failed to send: {}"}}"#, e),
+            }
+        }
+
+        "stop_dynamic" => {
+            // Stop the dynamic server daemon
+            let pid_file = "/tmp/l0_http_daemon.pid";
+            if let Ok(pid_str) = fs::read_to_string(pid_file) {
+                if let Ok(pid) = pid_str.trim().parse::<i32>() {
+                    unsafe { libc::kill(pid, libc::SIGTERM) };
+                    let _ = fs::remove_file(pid_file);
+                    return r#"{"ok":true,"value":"daemon stopped"}"#.to_string();
+                }
+            }
+            r#"{"ok":true,"value":"no daemon running"}"#.to_string()
+        }
+
         _ => format!(r#"{{"ok":false,"error":"unknown method: {}"}}"#, method),
     }
 }
@@ -189,23 +368,23 @@ fn handle_http_request(mut stream: TcpStream, config: &HashMap<String, String>) 
 fn route_request(method: &str, path: &str, request: &str, config: &HashMap<String, String>,
                  static_dir: &str, db_path: &str) -> (&'static str, &'static str, String) {
 
-    // 1. API 路由 - /api/posts CRUD
-    if path.starts_with("/api/") {
-        return handle_api(method, path, request, db_path);
-    }
-
-    // 2. POST 表单处理
-    if method == "POST" {
-        if let Some(result) = handle_form_post(path, request, db_path) {
-            return result;
-        }
-    }
-
-    // 3. 已注册的静态路由
+    // 1. 已注册的静态路由 (优先级最高)
     let route_key = format!("{} {}", method, path);
     if let Some(content) = config.get(&route_key) {
         let ct = guess_content_type(content);
         return ("200 OK", ct, content.clone());
+    }
+
+    // 2. API 路由 - /api/* 自动 CRUD (仅当无注册路由时)
+    if path.starts_with("/api/") {
+        return handle_api(method, path, request, db_path);
+    }
+
+    // 3. POST 表单处理
+    if method == "POST" {
+        if let Some(result) = handle_form_post(path, request, db_path) {
+            return result;
+        }
     }
 
     // 4. 静态文件服务
@@ -297,7 +476,69 @@ fn handle_api(method: &str, path: &str, request: &str, db_path: &str) -> (&'stat
         _ => r#"{"ok":false,"error":"Method not allowed"}"#.to_string()
     };
 
-    ("200 OK", "application/json", result)
+    // Extract actual data from db response wrapper for clean API responses
+    // db_plugin returns: {"ok":true,"value":...} or {"ok":false,"error":...}
+    let body = extract_db_value(&result);
+    ("200 OK", "application/json", body)
+}
+
+/// Extract value from db_plugin response, return raw value for API
+fn extract_db_value(db_response: &str) -> String {
+    // Try to parse as JSON and extract "value" field
+    if let Some(start) = db_response.find("\"value\":") {
+        let rest = &db_response[start + 8..];
+        let value_start = rest.trim_start();
+
+        if value_start.starts_with('[') || value_start.starts_with('{') {
+            // Array or object - find matching bracket
+            let open_char = value_start.chars().next().unwrap();
+            let close_char = if open_char == '[' { ']' } else { '}' };
+            let mut depth = 0;
+            let mut in_string = false;
+            let mut escape_next = false;
+
+            for (i, c) in value_start.char_indices() {
+                if escape_next {
+                    escape_next = false;
+                    continue;
+                }
+                match c {
+                    '\\' if in_string => escape_next = true,
+                    '"' => in_string = !in_string,
+                    c if c == open_char && !in_string => depth += 1,
+                    c if c == close_char && !in_string => {
+                        depth -= 1;
+                        if depth == 0 {
+                            return value_start[..=i].to_string();
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        } else if value_start.starts_with('"') {
+            // String value
+            let mut escape_next = false;
+            for (i, c) in value_start[1..].char_indices() {
+                if escape_next {
+                    escape_next = false;
+                    continue;
+                }
+                match c {
+                    '\\' => escape_next = true,
+                    '"' => return value_start[..i+2].to_string(),
+                    _ => {}
+                }
+            }
+        } else {
+            // Number or boolean - find end
+            if let Some(end) = value_start.find(|c: char| c == ',' || c == '}') {
+                return value_start[..end].trim().to_string();
+            }
+        }
+    }
+
+    // If parsing fails or error response, return original
+    db_response.to_string()
 }
 
 fn handle_form_post(path: &str, request: &str, db_path: &str) -> Option<(&'static str, &'static str, String)> {
@@ -368,12 +609,15 @@ fn handle_form_post(path: &str, request: &str, db_path: &str) -> Option<(&'stati
 }
 
 fn call_db(method: &str, args: &str, db_path: &str) -> String {
-    let db_plugin = "tools/db/target/release/db_plugin";
+    // Use L0_HOME if set, otherwise use relative path for development
+    let db_plugin = std::env::var("L0_HOME")
+        .map(|home| format!("{}/lib/l0/plugins/db_plugin", home))
+        .unwrap_or_else(|_| "target/release/db_plugin".to_string());
 
     // 确保数据库已初始化
     if !db_path.is_empty() {
         let init_req = format!(r#"{{"method":"init","args":["{}"]}}"#, db_path);
-        if let Ok(mut child) = Command::new(db_plugin)
+        if let Ok(mut child) = Command::new(&db_plugin)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn() {
@@ -387,7 +631,7 @@ fn call_db(method: &str, args: &str, db_path: &str) -> String {
 
     let request = format!(r#"{{"method":"{}","args":["{}"]}}"#, method, args.replace('"', "\\\""));
 
-    match Command::new(db_plugin)
+    match Command::new(&db_plugin)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn() {
@@ -683,6 +927,8 @@ fn extract_string(json: &str, key: &str) -> String {
 
 fn extract_args(json: &str) -> Vec<String> {
     let mut args = Vec::new();
+
+    // Try with space: "args": [
     let (start_opt, offset) = if let Some(start) = json.find("\"args\": [") {
         (Some(start), 9)
     } else if let Some(start) = json.find("\"args\":[") {
@@ -693,29 +939,48 @@ fn extract_args(json: &str) -> Vec<String> {
 
     if let Some(start) = start_opt {
         let rest = &json[start + offset..];
-        if let Some(end) = rest.find(']') {
-            let args_str = &rest[..end];
-            let mut in_string = false;
-            let mut current = String::new();
-            let mut chars = args_str.chars().peekable();
 
-            while let Some(c) = chars.next() {
+        // Parse args array, properly handling strings with brackets
+        let mut in_string = false;
+        let mut current = String::new();
+        let mut chars = rest.chars().peekable();
+        let mut escape_next = false;
+
+        while let Some(c) = chars.next() {
+            if escape_next {
+                // Handle JSON escape sequences
                 match c {
-                    '"' if !in_string => in_string = true,
-                    '"' if in_string => {
-                        in_string = false;
-                        args.push(current.clone());
-                        current.clear();
-                    }
-                    '\\' if in_string => {
-                        if let Some(&next) = chars.peek() {
-                            chars.next();
-                            current.push(next);
-                        }
-                    }
-                    _ if in_string => current.push(c),
-                    _ => {}
+                    'n' => current.push('\n'),
+                    'r' => current.push('\r'),
+                    't' => current.push('\t'),
+                    '\\' => current.push('\\'),
+                    '"' => current.push('"'),
+                    _ => current.push(c),
                 }
+                escape_next = false;
+                continue;
+            }
+
+            match c {
+                '\\' if in_string => {
+                    escape_next = true;
+                }
+                '"' if !in_string => {
+                    in_string = true;
+                }
+                '"' if in_string => {
+                    in_string = false;
+                    args.push(current.clone());
+                    current.clear();
+                }
+                ']' if !in_string => {
+                    // End of args array - only break when NOT inside a string
+                    break;
+                }
+                _ if in_string => {
+                    current.push(c);
+                }
+                _ => {}
             }
         }
     }
