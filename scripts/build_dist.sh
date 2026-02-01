@@ -34,7 +34,6 @@ rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR/bin"
 mkdir -p "$DIST_DIR/lib/l0/plugins"
 mkdir -p "$DIST_DIR/config"
-mkdir -p "$DIST_DIR/examples"
 mkdir -p "$DIST_DIR/stdlib"
 
 # Step 3: Copy binaries (dynamically from workspace)
@@ -64,16 +63,8 @@ echo "[4/5] Generating configuration..."
 # Transform: "target/release/xxx_plugin" -> "lib/l0/plugins/xxx_plugin"
 sed 's|"target/release/\([^"]*\)"|"lib/l0/plugins/\1"|g' tools.json > "$DIST_DIR/config/tools.json"
 
-# Step 5: Copy examples, stdlib, and docs
-echo "[5/5] Copying examples, stdlib, and documentation..."
-
-# Copy all .asm examples from examples/ directory
-for asm in examples/*.asm; do
-    if [ -f "$asm" ]; then
-        cp "$asm" "$DIST_DIR/examples/"
-        echo "  example: $(basename "$asm")"
-    fi
-done
+# Step 5: Copy stdlib and docs
+echo "[5/5] Copying stdlib and documentation..."
 
 # Copy stdlib (pattern library for AI agents)
 if [ -d "stdlib" ]; then
@@ -81,10 +72,10 @@ if [ -d "stdlib" ]; then
     echo "  stdlib: $(ls stdlib | wc -l | tr -d ' ') files"
 fi
 
-# Copy documentation
-if [ -f "BOOT.md" ]; then
-    cp BOOT.md "$DIST_DIR/"
-    echo "  doc: BOOT.md"
+# Copy documentation (full README.md as DOCS.md)
+if [ -f "README.md" ]; then
+    cp README.md "$DIST_DIR/DOCS.md"
+    echo "  doc: DOCS.md (full ISA reference)"
 fi
 
 # Install script
@@ -119,9 +110,8 @@ $SUDO mkdir -p "$PREFIX"
 $SUDO cp -r "$SCRIPT_DIR/bin" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/lib" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/config" "$PREFIX/"
-$SUDO cp -r "$SCRIPT_DIR/examples" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/stdlib" "$PREFIX/"
-[ -f "$SCRIPT_DIR/BOOT.md" ] && $SUDO cp "$SCRIPT_DIR/BOOT.md" "$PREFIX/"
+[ -f "$SCRIPT_DIR/DOCS.md" ] && $SUDO cp "$SCRIPT_DIR/DOCS.md" "$PREFIX/"
 
 $SUDO chmod +x "$PREFIX/bin/"*
 $SUDO chmod +x "$PREFIX/lib/l0/plugins/"*
@@ -188,8 +178,8 @@ export L0_HOME="/usr/local/l0"
 ## Usage
 
 ```bash
-# Compile assembly to bytecode
-l0asm examples/hello_world.asm > hello.l0
+# Compile assembly to bytecode (example from DOCS.md)
+l0asm hello.asm > hello.l0
 
 # Execute bytecode
 l0vm hello.l0
@@ -218,7 +208,7 @@ Plugins are located in `lib/l0/plugins/`:
 
 ## Documentation
 
-- **BOOT.md** - Full ISA reference, tool registry, and programming guide (included)
+- **DOCS.md** - Full ISA reference, tool registry, and programming guide (included)
 - Online: https://github.com/geyuxu/ai-programming-lang
 
 ## License

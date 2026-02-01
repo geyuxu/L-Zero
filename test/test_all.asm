@@ -250,12 +250,11 @@ ADD 200, 200, 100
 T14End:
 NOP
 
-# Test SCAT (STRLEN returns string, need ATOI)
+# Test SCAT with HLEN
 SETS 1, AB
 SETS 2, CD
 SCAT 3, 1, 2
-TEXEC 0x5004, 3, 4
-ATOI 5, 4
+HLEN 5, 3
 SET 50, 4
 CMP 5, 50
 BEQ T15Pass

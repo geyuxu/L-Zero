@@ -8,6 +8,8 @@ use std::net::{TcpListener, TcpStream};
 use std::collections::HashMap;
 use std::time::Duration;
 use std::process::{Command, Stdio};
+use std::thread;
+use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
 
 extern crate libc;
 
@@ -100,22 +102,40 @@ fn handle_request(request: &str) -> String {
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(1);
 
-            let config = load_config();
+            let config = Arc::new(load_config());
             let port = get_port();
 
             match TcpListener::bind(format!("127.0.0.1:{}", port)) {
                 Ok(listener) => {
-                    let mut count = 0;
+                    let count = Arc::new(AtomicUsize::new(0));
+                    let mut handles = Vec::new();
+
                     for stream in listener.incoming() {
-                        if count >= max_requests {
+                        let current = count.load(Ordering::SeqCst);
+                        if current >= max_requests {
                             break;
                         }
+
                         if let Ok(stream) = stream {
-                            handle_http_request(stream, &config);
-                            count += 1;
+                            let config_clone = Arc::clone(&config);
+                            let count_clone = Arc::clone(&count);
+
+                            // Spawn thread to handle request concurrently
+                            let handle = thread::spawn(move || {
+                                handle_http_request_arc(stream, &config_clone);
+                                count_clone.fetch_add(1, Ordering::SeqCst);
+                            });
+                            handles.push(handle);
                         }
                     }
-                    format!(r#"{{"ok":true,"value":"served {} requests"}}"#, count)
+
+                    // Wait for all active handlers to complete
+                    for handle in handles {
+                        handle.join().ok();
+                    }
+
+                    let final_count = count.load(Ordering::SeqCst);
+                    format!(r#"{{"ok":true,"value":"served {} requests"}}"#, final_count)
                 }
                 Err(e) => {
                     let hint = if e.to_string().contains("Address already in use") {
@@ -365,6 +385,11 @@ fn handle_http_request(mut stream: TcpStream, config: &HashMap<String, String>) 
     stream.flush().ok();
 }
 
+// Thread-safe version for multi-threaded serve
+fn handle_http_request_arc(stream: TcpStream, config: &Arc<HashMap<String, String>>) {
+    handle_http_request(stream, config.as_ref());
+}
+
 fn route_request(method: &str, path: &str, request: &str, config: &HashMap<String, String>,
                  static_dir: &str, db_path: &str) -> (&'static str, &'static str, String) {
 
@@ -420,7 +445,9 @@ fn handle_api(method: &str, path: &str, request: &str, db_path: &str) -> (&'stat
     // /api/posts - 帖子 CRUD
     // /api/posts/1 - 单个帖子操作
 
-    let parts: Vec<&str> = path.trim_start_matches("/api/").split('/').collect();
+    // Strip query parameters from path (e.g., /api/articles?id=4 -> /api/articles)
+    let path_without_query = path.split('?').next().unwrap_or(path);
+    let parts: Vec<&str> = path_without_query.trim_start_matches("/api/").split('/').collect();
     let table = parts.get(0).unwrap_or(&"");
     let id = parts.get(1).unwrap_or(&"");
 

@@ -448,10 +448,6 @@ impl VM {
                                     let rand_val = (seed % (max as u64)) as i64;
                                     rand_val.to_string()
                                 },
-                                "STRLEN" => {
-                                    // STRLEN: returns length of string
-                                    arg_str.len().to_string()
-                                },
                                 "ABS" => {
                                     // ABS: absolute value
                                     let val: i64 = arg_str.trim().parse().unwrap_or(0);
@@ -480,13 +476,6 @@ impl VM {
                                     use std::time::{SystemTime, UNIX_EPOCH};
                                     let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
                                     ts.to_string()
-                                },
-                                "CONCAT" => {
-                                    // CONCAT: "str1,str2" -> "str1str2"
-                                    let parts: Vec<&str> = arg_str.splitn(2, ',').collect();
-                                    if parts.len() == 2 {
-                                        format!("{}{}", parts[0], parts[1])
-                                    } else { arg_str.to_string() }
                                 },
                                 "SUBSTR" => {
                                     // SUBSTR: "str,start,len" -> substring
@@ -1063,7 +1052,7 @@ impl VM {
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("L-0 Virtual Machine v1.0");
+        eprintln!("L-0 Virtual Machine Preview");
         eprintln!("Usage: l0vm <program.l0> [--debug] [--dev]");
         eprintln!("");
         eprintln!("Standard workflow:");
@@ -1088,7 +1077,7 @@ fn main() {
         }
 
         let info = serde_json::json!({
-            "version": "1.0.0",
+            "version": "0.1.0-preview",
             "usage": "l0vm <program.l0> [--debug]",
             "description": "L-Zero Virtual Machine",
             "source_format": "ASM (.asm) - compile with l0asm",

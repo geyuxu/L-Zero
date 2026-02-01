@@ -1,4 +1,4 @@
-# L-Zero (v1.0): The Native Language of AI Agents
+# L-Zero (Preview): The Native Language of AI Agents
 
 > **Human Summary**: A deterministic, math-guaranteed virtual machine designed for AI code generation.
 > **Agent Summary**: This document is your Kernel. The ISA and Patterns below are the LAWS of physics in this environment.
@@ -9,7 +9,7 @@
 
 ### Build
 ```bash
-cargo build --release --workspace
+./scripts/build_dist.sh
 ```
 
 ### Run
@@ -158,14 +158,14 @@ gcc -O2 program.c -o program && ./program
 #### Memory
 | Op | Args | Description |
 |----|------|-------------|
-| NEW | dest, size | R[dest] = heap_alloc(size bytes) |
+| NEW | dest, size | R[dest] = heap_alloc(size bytes) **size is literal, not register** |
 | FREE | ptr | Free heap[R[ptr]] |
-| READ | dest, ptr, offset | R[dest] = heap[R[ptr]][offset] (u8) |
-| WRITE | ptr, offset, val | heap[R[ptr]][offset] = R[val] (u8) |
-| READR | dest, ptr, off | R[dest] = heap[R[ptr]][R[off]] (dynamic) |
-| WRITER | ptr, off, val | heap[R[ptr]][R[off]] = R[val] (dynamic) |
-| STORE64 | ptr, off, val | heap[R[ptr]][off*8..] = R[val] (full i64) |
-| LOAD64 | dest, ptr, off | R[dest] = heap[R[ptr]][off*8..] (full i64) |
+| READ | dest, ptr, offset | R[dest] = heap[R[ptr]][offset] (u8) **offset is literal** |
+| WRITE | ptr, offset, val | heap[R[ptr]][offset] = R[val] (u8) **offset is literal** |
+| READR | dest, ptr, off | R[dest] = heap[R[ptr]][R[off]] (dynamic offset from register) |
+| WRITER | ptr, off, val | heap[R[ptr]][R[off]] = R[val] (dynamic offset from register) |
+| STORE64 | ptr, off, val | heap[R[ptr]][R[off]*8..] = R[val] (i64, **off is register**) |
+| LOAD64 | dest, ptr, off | R[dest] = heap[R[ptr]][R[off]*8..] (i64, **off is register**) |
 
 #### Batch Operations
 | Op | Args | Description |
@@ -977,6 +977,50 @@ RequestLoop:
     JMP RequestLoop
 ```
 
+### Complete CMS Application
+```asm
+# L-0 CMS - combines Database + HTTP + Auto-CRUD
+# Open http://127.0.0.1:8080 after running
+
+# === Database Setup ===
+SETS 255, "cms.db"
+TEXEC 0x9000, 255, 0               # DB_INIT
+
+SETS 255, "articles|id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT,content TEXT,author TEXT"
+TEXEC 0x9001, 255, 0               # DB_CREATE_TABLE
+
+SETS 255, "articles|{\"title\":\"Welcome\",\"content\":\"Hello from L-0 CMS\",\"author\":\"System\"}"
+TEXEC 0x9002, 255, 0               # DB_INSERT (sample data)
+
+# === HTTP Server ===
+SETS 255, "8080"
+TEXEC 0x8000, 255, 0               # HTTP_INIT
+
+SETS 255, "cms.db"
+TEXEC 0x8007, 255, 0               # HTTP_DB (enables /api/articles auto-CRUD)
+
+# === Web UI (inline HTML) ===
+SETS 10, "<!DOCTYPE html><html><head><title>CMS</title></head><body>"
+SETS 11, "<h1>L-0 CMS</h1><div id=\"posts\"></div>"
+SETS 12, "<script>fetch('/api/articles').then(r=>r.json()).then(d=>{document.getElementById('posts').innerHTML=d.map(p=>'<article><h2>'+p.title+'</h2><p>'+p.content+'</p></article>').join('')})</script>"
+SETS 13, "</body></html>"
+SCAT 20, 10, 11
+SCAT 21, 20, 12
+SCAT 22, 21, 13                    # R22 = complete HTML
+
+SETS 23, "GET /|"
+SCAT 24, 23, 22
+TEXEC 0x8001, 24, 0                # HTTP_ROUTE: GET / -> HTML
+
+# === Start Server ===
+SETS 255, "CMS running at http://127.0.0.1:8080"
+TEXEC 0x5000, 255, 0
+
+SETS 255, "100"
+TEXEC 0x8002, 255, 0               # HTTP_SERVE (100 requests)
+HALT
+```
+
 ---
 
 ## Best Practices
@@ -1068,17 +1112,105 @@ HandleB:
 ## Known Limitations
 
 ### HTTP Plugin
+
+**CRITICAL: HTTP_SERVE(N) is NOT "blocking indefinitely"**
+- `HTTP_SERVE` serves **exactly N requests**, then returns
+- Default N=1 if no argument provided
+- Browser makes multiple concurrent requests (/, favicon.ico, CSS, JS)
+- A single page load may consume 3-10 requests instantly
+
 | Issue | Solution |
 |-------|----------|
+| "Server stops immediately" | Pass request count: `SETS 255, "100"` before `TEXEC 0x8002` |
 | Route Priority | Registered routes first, then `/api/*` auto-CRUD |
 | Port Reuse | Wait ~30s after stop or use different port |
 | Static vs Dynamic | Use HTTP_LISTEN + HTTP_SEND for dynamic responses |
+| API URL format | Use path-based: `/api/table/id` not `/api/table?id=X` |
+| Concurrency | Multi-threaded: handles browser concurrent requests |
+
+**Server Patterns:**
+```asm
+# Pattern 1: Finite service (recommended for testing)
+SETS 255, "100"
+TEXEC 0x8002, 255, 0   # Serve 100 requests, then HALT
+
+# Pattern 2: Infinite loop service
+ServerLoop:
+    SETS 255, "50"
+    TEXEC 0x8002, 255, 0
+    JMP ServerLoop         # Restart after 50 requests
+
+# Pattern 3: Dynamic responses (full control)
+RequestLoop:
+    TEXEC 0x8008, 255, 0   # HTTP_LISTEN (blocks waiting)
+    # ... build response in R16 ...
+    TEXEC 0x8009, 16, 0    # HTTP_SEND
+    JMP RequestLoop
+```
 
 ### Database Plugin
+
+**CRITICAL: DB_SELECT returns JSON string, not object handle**
+- Result is a heap pointer to a JSON string like `[{"id":1,"name":"Alice"}]`
+- Print directly with `TEXEC 0x5000, result_reg, 0`
+- Parse JSON fields manually if needed
+
 | Issue | Solution |
 |-------|----------|
-| INSERT format | Use `table|{json}` format |
-| DELETE syntax | Format: `table|condition` (e.g., `users|id=5`) |
+| INSERT format | Use `table\|{json}`: `SETS 255, "users\|{\"name\":\"Alice\"}"` |
+| DELETE syntax | Format: `table\|condition` (e.g., `users\|id=5`) |
+| String conditions | Use SQL quotes: `name='Alice'` not `name=Alice` |
+| DB_SELECT return | Returns JSON string directly, not object handle |
+
+**Database Examples:**
+```asm
+# Initialize database
+SETS 255, "data.db"
+TEXEC 0x9000, 255, 0   # DB_INIT
+
+# Create table
+SETS 255, "users|id INTEGER PRIMARY KEY,name TEXT"
+TEXEC 0x9001, 255, 0   # DB_CREATE_TABLE
+
+# Insert (note: JSON in string)
+SETS 255, "users|{\"name\":\"Alice\"}"
+TEXEC 0x9002, 255, 0   # DB_INSERT -> R0 = last_insert_id
+
+# Select all
+SETS 255, "users"
+TEXEC 0x9003, 255, 0   # DB_SELECT -> R0 = "[{...},...]"
+TEXEC 0x5000, 0, 0     # Print the JSON array
+```
+
+### TEXEC Instruction
+
+**CRITICAL: TEXEC has exactly 3 operands**
+- Syntax: `TEXEC tool_id, arg_register, dest_register`
+- There is NO 4-operand form
+- All arguments must be packed into a single string using `|` delimiter
+
+| Issue | Solution |
+|-------|----------|
+| Operand count | Only 3 operands: `TEXEC tool, arg, dest` |
+| Multiple args | Use pipe delimiter: `SETS 255, "arg1\|arg2\|arg3"` |
+| Result type | Always returns string in heap, use ATOI if needed |
+| "PRINTN not found" | Use `TEXEC 0x5001` for PRINTLN, `TEXEC 0x5000` for PRINT |
+
+**Print Examples:**
+```asm
+# PRINT (no newline)
+SETS 255, "Hello"
+TEXEC 0x5000, 255, 0
+
+# PRINTLN (with newline)
+SETS 255, "World"
+TEXEC 0x5001, 255, 0
+
+# Print integer
+SET 10, 42
+ITOA 11, 10          # R11 = "42"
+TEXEC 0x5001, 11, 0  # Print "42\n"
+```
 
 ### Control Flow
 | Issue | Solution |
@@ -1092,6 +1224,7 @@ HandleB:
 |---------|------|
 | Escape sequences | `\n`, `\t`, `\"`, `\\` supported in SETS |
 | Comma in strings | Works correctly: `SETS 1, "Hello, World"` |
+| Trailing spaces | **Known issue**: Trailing spaces may be stripped from strings |
 
 ---
 
@@ -1122,10 +1255,10 @@ Returns: `version`, `architecture`, `isa.primitives`, `tools`.
 ## Build
 
 ```bash
-cargo build --release --workspace
+./scripts/build_dist.sh [version]
 ```
 
-Or use the build script:
+This script builds all workspace crates and creates a distribution package in `dist/`. For development builds only:
 ```bash
 ./scripts/build_release.sh
 ```
@@ -1148,12 +1281,10 @@ Or use the build script:
 │   ├── http_plugin/        # HTTP server
 │   └── db_plugin/          # SQLite database
 ├── tools.json              # Tool Registry
-├── examples/               # Example programs
 ├── stdlib/                 # Standard library source
-├── test/                   # Test suite
 └── README.md               # This file (System Kernel)
 ```
 
 ---
 
-*L-0 v1.0 | 52 ISA Primitives | Semantic Computing | The Language of Autonomous AI*
+*L-0 Preview | 52 ISA Primitives | Semantic Computing | The Language of Autonomous AI*

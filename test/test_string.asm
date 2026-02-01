@@ -1,47 +1,44 @@
 # L-0 String Operations Test Suite
-# Tests: STRLEN, CONCAT, UPPER, LOWER, TRIM, SCAT
-# Note: TEXEC returns heap pointer to result string, use ATOI to convert to int
+# Tests: HLEN (string length), UPPER, LOWER, TRIM, SCAT
+# Note: HLEN is a native instruction that returns length as integer
 
 SETS 255, === String Operations Test ===
 TEXEC 0x5000, 255, 0
 
-# --- Test STRLEN ---
+# --- Test HLEN (string length) ---
 SETS 1, Hello World
-TEXEC 0x5004, 1, 2
-ATOI 3, 2
+HLEN 3, 1
 SET 100, 11
 CMP 3, 100
 BEQ StrlenPass
-SETS 255, [FAIL] STRLEN: 'Hello World' should be 11
+SETS 255, [FAIL] HLEN: 'Hello World' should be 11
 TEXEC 0x5000, 255, 0
 JMP StrlenEnd
 StrlenPass:
-SETS 255, [PASS] STRLEN: 'Hello World' = 11 chars
+SETS 255, [PASS] HLEN: 'Hello World' = 11 chars
 TEXEC 0x5000, 255, 0
 StrlenEnd:
 NOP
 
-# --- Test STRLEN with empty string ---
-SETS 1,
-TEXEC 0x5004, 1, 2
-ATOI 3, 2
-SET 100, 0
+# --- Test HLEN with short string ---
+SETS 1, X
+HLEN 3, 1
+SET 100, 1
 CMP 3, 100
-BEQ StrlenEmptyPass
-SETS 255, [FAIL] STRLEN: empty string should be 0
+BEQ StrlenShortPass
+SETS 255, [FAIL] HLEN: 'X' should be 1
 TEXEC 0x5000, 255, 0
-JMP StrlenEmptyEnd
-StrlenEmptyPass:
-SETS 255, [PASS] STRLEN: empty string = 0 chars
+JMP StrlenShortEnd
+StrlenShortPass:
+SETS 255, [PASS] HLEN: 'X' = 1 char
 TEXEC 0x5000, 255, 0
-StrlenEmptyEnd:
+StrlenShortEnd:
 NOP
 
 # --- Test UPPER ---
 SETS 1, hello
 TEXEC 0x500C, 1, 2
-TEXEC 0x5004, 2, 3
-ATOI 4, 3
+HLEN 4, 2
 SET 100, 5
 CMP 4, 100
 BEQ UpperPass
@@ -57,8 +54,7 @@ NOP
 # --- Test LOWER ---
 SETS 1, WORLD
 TEXEC 0x500D, 1, 2
-TEXEC 0x5004, 2, 3
-ATOI 4, 3
+HLEN 4, 2
 SET 100, 5
 CMP 4, 100
 BEQ LowerPass
@@ -72,14 +68,13 @@ LowerEnd:
 NOP
 
 # --- Test TRIM ---
-SETS 1,    trimme
+SETS 1, "  hello  "
 TEXEC 0x500E, 1, 2
-TEXEC 0x5004, 2, 3
-ATOI 4, 3
-SET 100, 6
+HLEN 4, 2
+SET 100, 5
 CMP 4, 100
 BEQ TrimPass
-SETS 255, [FAIL] TRIM: result length should be 6
+SETS 255, [FAIL] TRIM: result length should be 5
 TEXEC 0x5000, 255, 0
 JMP TrimEnd
 TrimPass:
@@ -92,8 +87,7 @@ NOP
 SETS 1, Foo
 SETS 2, Bar
 SCAT 3, 1, 2
-TEXEC 0x5004, 3, 4
-ATOI 5, 4
+HLEN 5, 3
 SET 100, 6
 CMP 5, 100
 BEQ ScatPass

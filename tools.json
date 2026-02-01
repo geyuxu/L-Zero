@@ -1,5 +1,5 @@
 {
-    "$schema": "L-0 Tool Registry v1.0",
+    "$version": "L-0 Tool Registry Preview",
     "$doc": "工具注册表 - VM 通过 TEXEC 指令调用此处定义的工具",
 
     "$architecture": {
@@ -48,12 +48,7 @@
         "0x500D": { "name": "LOWER", "type": "builtin", "desc": "Lowercase string" },
         "0x500E": { "name": "TRIM", "type": "builtin", "desc": "Trim whitespace" },
         "0x500A": { "name": "SUBSTR", "type": "builtin", "desc": "Substring (str,start,len)" },
-        "0x500B": { "name": "SPLIT", "type": "builtin", "desc": "Split string by delimiter" },
-
-        "$deprecated": {
-            "0x5004": { "name": "STRLEN", "note": "Use ISA HLEN instead" },
-            "0x5009": { "name": "CONCAT", "note": "Use ISA SCAT instead" }
-        }
+        "0x500B": { "name": "SPLIT", "type": "builtin", "desc": "Split string by delimiter" }
     },
 
     "plugins": {

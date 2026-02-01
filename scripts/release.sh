@@ -23,7 +23,6 @@ echo "[3/8] Creating distribution structure..."
 mkdir -p "${DIST_DIR}/bin"
 mkdir -p "${DIST_DIR}/lib/l0/plugins"
 mkdir -p "${DIST_DIR}/config"
-mkdir -p "${DIST_DIR}/examples"
 mkdir -p "${DIST_DIR}/stdlib"
 
 # 4. Copy core binaries (read binary name from each Cargo.toml)
@@ -53,11 +52,9 @@ echo "[6/8] Generating production config..."
 # Transform: "target/release/xxx_plugin" -> "lib/l0/plugins/xxx_plugin"
 sed 's|"target/release/\([^"]*\)"|"lib/l0/plugins/\1"|g' tools.json > "${DIST_DIR}/config/tools.json"
 
-# 7. Copy documentation, examples, and stdlib
-echo "[7/8] Copying docs, examples, and stdlib..."
-cp README.md "${DIST_DIR}/"
-cp BOOT.md "${DIST_DIR}/" 2>/dev/null || true
-cp -r examples/*.asm "${DIST_DIR}/examples/" 2>/dev/null || true
+# 7. Copy documentation and stdlib
+echo "[7/8] Copying docs and stdlib..."
+cp README.md "${DIST_DIR}/DOCS.md"
 cp -r stdlib/* "${DIST_DIR}/stdlib/" 2>/dev/null || true
 
 # Create install script
@@ -88,9 +85,8 @@ $SUDO mkdir -p "$PREFIX"
 $SUDO cp -r "$SCRIPT_DIR/bin" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/lib" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/config" "$PREFIX/"
-$SUDO cp -r "$SCRIPT_DIR/examples" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/stdlib" "$PREFIX/"
-[ -f "$SCRIPT_DIR/BOOT.md" ] && $SUDO cp "$SCRIPT_DIR/BOOT.md" "$PREFIX/"
+[ -f "$SCRIPT_DIR/DOCS.md" ] && $SUDO cp "$SCRIPT_DIR/DOCS.md" "$PREFIX/"
 
 $SUDO chmod +x "$PREFIX/bin/"*
 $SUDO chmod +x "$PREFIX/lib/l0/plugins/"*

@@ -44,9 +44,7 @@ NOP
 
 # --- Test SETS (string) ---
 SETS 1, Hello
-TEXEC 0x5004, 1, 2
-# STRLEN returns a string, need ATOI to convert to int
-ATOI 3, 2
+HLEN 3, 1
 SET 100, 5
 CMP 3, 100
 BEQ SetsPass
@@ -62,9 +60,7 @@ NOP
 # --- Test ITOA (integer to string) ---
 SET 1, 12345
 ITOA 2, 1
-TEXEC 0x5004, 2, 3
-# STRLEN returns a string, need ATOI to convert to int
-ATOI 4, 3
+HLEN 4, 2
 SET 100, 5
 CMP 4, 100
 BEQ ItoaPass
