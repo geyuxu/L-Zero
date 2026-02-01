@@ -173,6 +173,10 @@ fn main() {
             "TRAP" => Instruction::TRAP { code: parse_u8(args, 0) },
             "YIELD" => Instruction::YIELD { query: parse_u8(args, 0), dest: parse_u8(args, 1) },
 
+            // Memory Watermark (Arena-style Reset)
+            "MARK" => Instruction::MARK { dest: parse_u8(args, 0) },
+            "RESET" => Instruction::RESET { limit: parse_u8(args, 0) },
+
             _ => {
                 eprintln!("Error: Unknown Opcode '{}' at line {}", op, raw.line_num);
                 std::process::exit(1);

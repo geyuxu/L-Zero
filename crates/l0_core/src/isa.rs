@@ -217,5 +217,13 @@ define_isa! {
     TRAP { code: u8 },
 
     /// Yield to supervisor: emit query, receive response into R[dest]
-    YIELD { query: u8, dest: u8 }
+    YIELD { query: u8, dest: u8 },
+
+    // === 11. Memory Watermark (Arena-style Reset) ===
+
+    /// Mark current heap position: R[dest] = current_heap_watermark
+    MARK { dest: u8 },
+
+    /// Reset heap to watermark: free all allocations after R[limit]
+    RESET { limit: u8 }
 }
