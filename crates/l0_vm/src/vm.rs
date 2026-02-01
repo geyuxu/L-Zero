@@ -84,6 +84,20 @@ impl ToolRegistry {
             if Path::new(p).exists() {
                  if let Ok(content) = fs::read_to_string(p) {
                      if let Ok(json) = serde_json::from_str::<Value>(&content) {
+                         // Update env_dir based on where tools.json was found
+                         // e.g., ~/.l0/config/tools.json -> env_dir = ~/.l0
+                         if let Some(parent) = Path::new(p).parent() {
+                             if let Some(grandparent) = parent.parent() {
+                                 // config/tools.json -> parent is config, grandparent is install dir
+                                 if parent.file_name().map(|n| n == "config").unwrap_or(false) {
+                                     self.env_dir = grandparent.to_string_lossy().to_string();
+                                 }
+                             } else {
+                                 // tools.json in current directory
+                                 self.env_dir = parent.to_string_lossy().to_string();
+                             }
+                         }
+
                          for section in ["plugins", "builtins"] {
                              if let Some(plugins) = json.get(section) {
                                  if let Some(obj) = plugins.as_object() {
@@ -109,7 +123,7 @@ impl ToolRegistry {
                                  }
                              }
                          }
-                         eprintln!("[Registry] Loaded {} tools from {}", self.plugins.len(), p);
+                         eprintln!("[Registry] Loaded {} tools from {} (env_dir: {})", self.plugins.len(), p, self.env_dir);
                      } else {
                          eprintln!("[Registry] Failed to parse JSON from {}", p);
                      }
@@ -261,6 +275,33 @@ impl LinearHeap {
         self.allocations.get(&ptr).and_then(|a| {
             if a.used { Some(a.offset) } else { None }
         })
+    }
+
+    /// Mark current heap state (returns watermark: bump position encoded with next_ptr)
+    /// Watermark format: (bump << 32) | next_ptr
+    fn mark(&self) -> i64 {
+        ((self.bump as i64) << 32) | (self.next_ptr & 0xFFFFFFFF)
+    }
+
+    /// Reset heap to a previous watermark, freeing all allocations made after
+    fn reset(&mut self, watermark: i64) {
+        let saved_bump = ((watermark >> 32) & 0xFFFFFFFF) as usize;
+        let saved_next_ptr = (watermark & 0xFFFFFFFF) as i64;
+
+        // Only reset if watermark is valid (bump can only decrease or stay same)
+        if saved_bump <= self.bump {
+            // Remove all allocations with ptr >= saved_next_ptr
+            self.allocations.retain(|&ptr, _| ptr < saved_next_ptr);
+
+            // Reset bump pointer
+            self.bump = saved_bump;
+
+            // Clear free list entries that are beyond the new bump
+            self.free_list.retain(|(off, _)| *off < saved_bump);
+
+            // Reset next_ptr to saved value
+            self.next_ptr = saved_next_ptr;
+        }
     }
 }
 
@@ -1044,6 +1085,18 @@ impl VM {
                     }
                 },
 
+                // === Memory Watermark (Arena-style Reset) ===
+                Instruction::MARK { dest } => {
+                    // Store current heap watermark for later reset
+                    self.registers[*dest as usize] = self.heap.mark();
+                },
+
+                Instruction::RESET { limit } => {
+                    // Reset heap to saved watermark, freeing all allocations made after
+                    let watermark = self.registers[*limit as usize];
+                    self.heap.reset(watermark);
+                },
+
                 _ => {}
          }
     }
@@ -1077,7 +1130,7 @@ fn main() {
         }
 
         let info = serde_json::json!({
-            "version": "0.1.0-preview",
+            "version": "0.0.1",
             "usage": "l0vm <program.l0> [--debug]",
             "description": "L-Zero Virtual Machine",
             "source_format": "ASM (.asm) - compile with l0asm",
