@@ -639,6 +639,17 @@ impl VM {
                     self.flag_gt = v1 > v2;
                     self.flag_lt = v1 < v2;
                 },
+                Instruction::SCMP { s1, s2 } => {
+                    // String comparison: compare heap string contents
+                    let ptr1 = self.registers[*s1 as usize];
+                    let ptr2 = self.registers[*s2 as usize];
+                    let str1 = self.heap.get(ptr1).map(|d| String::from_utf8_lossy(d).to_string()).unwrap_or_default();
+                    let str2 = self.heap.get(ptr2).map(|d| String::from_utf8_lossy(d).to_string()).unwrap_or_default();
+                    let cmp_result = str1.cmp(&str2);
+                    self.flag_eq = cmp_result == std::cmp::Ordering::Equal;
+                    self.flag_gt = cmp_result == std::cmp::Ordering::Greater;
+                    self.flag_lt = cmp_result == std::cmp::Ordering::Less;
+                },
                 Instruction::JMP { target } => { self.pc = *target; },
                 Instruction::BEQ { target } => { if self.flag_eq { self.pc = *target; } },
                 Instruction::BGT { target } => { if self.flag_gt { self.pc = *target; } },
@@ -646,6 +657,12 @@ impl VM {
                 Instruction::NEW { dest, size } => {
                     let ptr = self.heap_alloc(vec![0u8; *size]);
                      self.registers[*dest as usize] = ptr;
+                },
+                Instruction::NEWR { dest, size_reg } => {
+                    // Dynamic allocation: size comes from a register
+                    let size = self.registers[*size_reg as usize] as usize;
+                    let ptr = self.heap_alloc(vec![0u8; size]);
+                    self.registers[*dest as usize] = ptr;
                 },
                 Instruction::FREE { ptr } => {
                     let p = self.registers[*ptr as usize];

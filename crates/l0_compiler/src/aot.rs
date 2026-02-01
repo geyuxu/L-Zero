@@ -141,8 +141,26 @@ static int64_t heap_alloc(const char* data, size_t len) {
     return ptr;
 }
 
+// Allocate string: stores strlen+1 bytes (with null terminator for C safety)
+// but records size as strlen (for HLEN consistency with VM)
 static int64_t heap_alloc_str(const char* str) {
-    return heap_alloc(str, strlen(str) + 1);  // Include null terminator
+    size_t len = strlen(str);
+    if (len == 0) return 0;
+    if (heap_bump + len + 1 > HEAP_SIZE) return 0;
+
+    size_t offset = heap_bump;
+    heap_bump += len + 1;  // Allocate len+1 for null terminator
+
+    memcpy(heap_buffer + offset, str, len + 1);  // Copy including null
+
+    int64_t ptr = next_ptr++;
+    if (ptr >= 65536) return 0;
+
+    allocations[ptr].offset = offset;
+    allocations[ptr].size = len;  // Record as len (without null) to match VM
+    allocations[ptr].used = 1;
+
+    return ptr;
 }
 
 static unsigned char* heap_get(int64_t ptr) {
@@ -253,6 +271,64 @@ static char* texec_builtin(int tool_id, const char* arg) {
                 }
             }
             break;
+        case 0x500A: // SUBSTR: "str,start,len" -> substring
+            {
+                char str_copy[4096];
+                strncpy(str_copy, arg, sizeof(str_copy) - 1);
+                str_copy[sizeof(str_copy) - 1] = '\0';
+                char* comma1 = strchr(str_copy, ',');
+                if (comma1) {
+                    *comma1 = '\0';
+                    char* comma2 = strchr(comma1 + 1, ',');
+                    if (comma2) {
+                        *comma2 = '\0';
+                        int start = atoi(comma1 + 1);
+                        int len = atoi(comma2 + 1);
+                        int str_len = strlen(str_copy);
+                        if (start < str_len) {
+                            int end = (start + len < str_len) ? start + len : str_len;
+                            strncpy(buf, str_copy + start, end - start);
+                            buf[end - start] = '\0';
+                        }
+                    }
+                }
+            }
+            break;
+        case 0x500B: // SPLIT: "str,delim,index" -> element at index after split
+            {
+                char str_copy[4096];
+                strncpy(str_copy, arg, sizeof(str_copy) - 1);
+                str_copy[sizeof(str_copy) - 1] = '\0';
+                char* comma1 = strchr(str_copy, ',');
+                if (comma1) {
+                    *comma1 = '\0';
+                    char* comma2 = strchr(comma1 + 1, ',');
+                    if (comma2) {
+                        *comma2 = '\0';
+                        const char* delim = comma1 + 1;
+                        int idx = atoi(comma2 + 1);
+                        char* str = str_copy;
+                        char* token;
+                        int curr_idx = 0;
+                        // Simple split implementation
+                        while ((token = strstr(str, delim)) != NULL) {
+                            if (curr_idx == idx) {
+                                int len = token - str;
+                                strncpy(buf, str, len);
+                                buf[len] = '\0';
+                                break;
+                            }
+                            str = token + strlen(delim);
+                            curr_idx++;
+                        }
+                        // Handle last element or if no delimiter found
+                        if (curr_idx == idx && buf[0] == '\0') {
+                            strcpy(buf, str);
+                        }
+                    }
+                }
+            }
+            break;
         default:
             snprintf(buf, sizeof(buf), "[Tool 0x%04X not implemented]", tool_id);
     }
@@ -313,7 +389,7 @@ static void scat_reg(int dest, int s1, int s2) {
     char* buf = malloc(len + 1);
     strcpy(buf, str1);
     strcat(buf, str2);
-    regs[dest] = heap_alloc(buf, len + 1);  // Include null terminator
+    regs[dest] = heap_alloc_str(buf);  // Use heap_alloc_str for consistent HLEN behavior
     free(buf);
 }
 
@@ -615,7 +691,7 @@ fn generate_instruction(instr: &Instruction, _line: usize, _tools: &HashMap<u16,
     printf("\n");
 "#.to_string(),
 
-        Instruction::GAS(reg) => format!("    regs[{}] = 1000000; // GAS\n", reg),
+        Instruction::GAS(reg) => format!("    regs[{}] = 1000; // GAS (match VM behavior)\n", reg),
 
         Instruction::ASSERT(reg) => format!(
             "    if (regs[{}] == 0) {{ fprintf(stderr, \"ASSERT FAILED\\n\"); exit(1); }}\n", reg),
@@ -649,6 +725,10 @@ fn generate_instruction(instr: &Instruction, _line: usize, _tools: &HashMap<u16,
             "    flag_eq = (regs[{}] == regs[{}]); flag_gt = (regs[{}] > regs[{}]); flag_lt = (regs[{}] < regs[{}]);\n",
             r1, r2, r1, r2, r1, r2),
 
+        Instruction::SCMP { s1, s2 } => format!(
+            "    {{ int cmp = strcmp(heap_str(regs[{}]), heap_str(regs[{}])); flag_eq = (cmp == 0); flag_gt = (cmp > 0); flag_lt = (cmp < 0); }}\n",
+            s1, s2),
+
         Instruction::JMP { target } => format!("    goto L{};\n", target),
         Instruction::BEQ { target } => format!("    if (flag_eq) goto L{};\n", target),
         Instruction::BGT { target } => format!("    if (flag_gt) goto L{};\n", target),
@@ -656,6 +736,9 @@ fn generate_instruction(instr: &Instruction, _line: usize, _tools: &HashMap<u16,
 
         Instruction::NEW { dest, size } => format!(
             "    regs[{}] = heap_alloc(NULL, {});\n", dest, size),
+
+        Instruction::NEWR { dest, size_reg } => format!(
+            "    regs[{}] = heap_alloc(NULL, (size_t)regs[{}]);\n", dest, size_reg),
 
         Instruction::FREE { ptr } => format!("    heap_free(regs[{}]);\n", ptr),
 

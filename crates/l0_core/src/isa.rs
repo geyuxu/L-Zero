@@ -122,7 +122,10 @@ define_isa! {
     NOT { dest: u8, src: u8 },
 
     // === 5. Control Flow ===
+    /// Compare two integers: sets flags based on R[r1] vs R[r2]
     CMP { r1: u8, r2: u8 },
+    /// Compare two strings: sets flags based on strcmp(heap[R[s1]], heap[R[s2]])
+    SCMP { s1: u8, s2: u8 },
     /// Unconditional Jump (Absolute Line)
     JMP { target: usize }, 
     BEQ { target: usize },
@@ -130,7 +133,10 @@ define_isa! {
     BLT { target: usize },
 
     // === 6. Memory (Safe Heap) ===
+    /// Allocate fixed-size memory: R[dest] = heap_alloc(size bytes)
     NEW { dest: u8, size: usize },
+    /// Allocate dynamic-size memory: R[dest] = heap_alloc(R[size_reg] bytes)
+    NEWR { dest: u8, size_reg: u8 },
     FREE { ptr: u8 },
     READ { dest: u8, ptr: u8, offset: usize },
     WRITE { ptr: u8, offset: usize, val: u8 },

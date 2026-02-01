@@ -26,7 +26,7 @@ gcc -O2 program.c -o program && ./program
 ### Why L-0?
 - **For AI Agents**: Optimal token efficiency, deterministic output, no parsing ambiguity
 - **ASM over JSON**: Labels for control flow (not line numbers), inline comments, robust parsing
-- **52 Primitives + Infinite Tools**: Core ISA compiled into VM; plugins extend via JSON-RPC
+- **56 Primitives + Infinite Tools**: Core ISA compiled into VM; plugins extend via JSON-RPC
 
 ---
 
@@ -60,7 +60,7 @@ L-0 is a **NON-STANDARD** virtual machine.
 
 ### The Only Truth
 
-- Your entire universe consists ONLY of the 52 instructions listed below.
+- Your entire universe consists ONLY of the 56 instructions listed below.
 - If an instruction is not in the list, **IT DOES NOT EXIST**.
 
 ---
@@ -171,7 +171,8 @@ L-0 is a **NON-STANDARD** virtual machine.
 #### Control Flow
 | Syntax | Semantics | Example |
 |--------|-----------|---------|
-| `CMP a, b` | `flags = compare(regs[a], regs[b])` | `CMP 1, 2` |
+| `CMP a, b` | `flags = compare(regs[a], regs[b])` (integer) | `CMP 1, 2` |
+| `SCMP a, b` | `flags = strcmp(heap[regs[a]], heap[regs[b]])` (string) | `SCMP 1, 2` |
 | `JMP label` | `pc = label` | `JMP Loop` |
 | `BEQ label` | `if flags.EQ: pc = label` | `BEQ Done` |
 | `BGT label` | `if flags.GT: pc = label` | `BGT Bigger` |
@@ -181,6 +182,7 @@ L-0 is a **NON-STANDARD** virtual machine.
 | Syntax | Semantics | Example |
 |--------|-----------|---------|
 | `NEW d, size` | `regs[d] = heap_alloc(size)` ⚠️ size is **literal** | `NEW 1, 256` |
+| `NEWR d, r` | `regs[d] = heap_alloc(regs[r])` (dynamic size) | `NEWR 1, 2` |
 | `FREE ptr` | `heap_free(regs[ptr])` | `FREE 1` |
 | `READ d, p, off` | `regs[d] = heap[regs[p]][off]` ⚠️ off is **literal** | `READ 2, 1, 0` |
 | `WRITE p, off, v` | `heap[regs[p]][off] = regs[v]` ⚠️ off is **literal** | `WRITE 1, 0, 2` |
@@ -590,6 +592,11 @@ substr_done:
 # ==================================================================
 # strcmp: Compare two strings (lexicographic)
 # ==================================================================
+# NOTE: For simple equality checks, use SCMP instruction instead:
+#       SCMP 0, 1    # Compare strings in R0 and R1, sets flags
+#       BEQ equal    # Jump if strings are equal
+#
+# This pattern is for when you need the -1/0/1 result value.
 # Input:  R0 = string1 pointer, R1 = string2 pointer
 # Output: R0 = 0 if equal, -1 if s1<s2, 1 if s1>s2
 # Clobbers: R4, R5, R6, R7, R8
@@ -722,9 +729,11 @@ print_int_done:
 # ==================================================================
 # Input:  R0 = capacity (bytes)
 # Output: R0 = buffer pointer, R1 = current length (0)
+# Clobbers: R50
 # ------------------------------------------------------------------
 sb_init:
-    NEW 0, 0              # Allocate R0 bytes
+    MOV 50, 0             # R50 = capacity (save R0)
+    NEWR 0, 50            # R0 = new heap allocation (size from R50)
     SET 1, 0              # Length = 0
 sb_init_done:
 
@@ -733,14 +742,15 @@ sb_init_done:
 # ==================================================================
 # Input:  R0 = buffer ptr, R1 = current len, R2 = string to append
 # Output: R1 = new length
-# Clobbers: R4, R5, R6
+# Clobbers: R4, R5
 # ------------------------------------------------------------------
 sb_append:
     # Get length of string to append
     HLEN 4, 2             # R4 = len(string)
+    SET 5, 0              # R5 = 0 (source offset)
 
     # Memcpy(dest=buf, dest_off=len, src=str, src_off=0, count=str_len)
-    MEMCPY 0, 1, 2, 0, 4
+    MEMCPY 0, 1, 2, 5, 4  # dst=R0, doff=R1, src=R2, soff=R5(0), len=R4
 
     # Update length
     ADD 1, 1, 4           # new_len = old_len + str_len
@@ -752,9 +762,11 @@ sb_append_done:
 # Input:  R0 = buffer ptr, R1 = length
 # Output: R0 = new string pointer
 # Note: Caller should FREE the original buffer if needed
+# Clobbers: R50
 # ------------------------------------------------------------------
 sb_finish:
-    SLICE 0, 0, 0, 1      # Create exact-sized string
+    SET 50, 0             # R50 = 0 (offset)
+    SLICE 0, 0, 50, 1     # Create exact-sized string (ptr=R0, off=R50(0), len=R1)
 sb_finish_done:
 ```
 
@@ -1069,7 +1081,7 @@ sqrt_int_done:
 array_new:
     SET 4, 8
     MUL 4, 0, 4            # R4 = count * 8 (bytes)
-    NEW 0, 4               # R0 = new heap allocation
+    NEWR 0, 4              # R0 = new heap allocation (size from R4)
 array_new_done:
 
 # ==================================================================
@@ -1549,13 +1561,14 @@ RequestLoop:
     SETS 10, "/api/posts"
     HLEN 11, 4                          # R11 = len(path)
     HLEN 12, 10                         # R12 = len("/api/posts") = 11
-    SLICE 13, 4, 0, 12                  # R13 = first 11 chars of path
-    CMP 13, 10
+    SET 15, 0                           # R15 = 0 (offset for SLICE)
+    SLICE 13, 4, 15, 12                 # R13 = first 11 chars of path
+    SCMP 13, 10                         # String compare R13 vs R10
     BEQ ApiPostsRoute                   # Path starts with /api/posts
 
     # Check if path is "/"
     SETS 14, "/"
-    CMP 4, 14
+    SCMP 4, 14                          # String compare R4 vs R14
     BEQ ServeHtml                       # Serve HTML frontend
 
     # 404 for other paths
@@ -1565,17 +1578,17 @@ RequestLoop:
 # API ROUTES: /api/posts
 # ========================================
 ApiPostsRoute:
-    # Check method
+    # Check method (use SCMP for string comparison)
     SETS 20, "GET"
-    CMP 2, 20
+    SCMP 2, 20                          # String compare method vs "GET"
     BEQ HandleGet
 
     SETS 21, "POST"
-    CMP 2, 21
+    SCMP 2, 21                          # String compare method vs "POST"
     BEQ HandlePost
 
     SETS 22, "DELETE"
-    CMP 2, 22
+    SCMP 2, 22                          # String compare method vs "DELETE"
     BEQ HandleDelete
 
     JMP MethodNotAllowed
@@ -2180,22 +2193,22 @@ TEXEC 0x9003, 255, 1   # R1 = sorted results
 | Operand count | Only 3 operands: `TEXEC tool, arg, dest` |
 | Multiple args | Use pipe delimiter: `SETS 255, "arg1\|arg2\|arg3"` |
 | Result type | Always returns string in heap, use ATOI if needed |
-| "PRINTN not found" | Use `TEXEC 0x5001` for PRINTLN, `TEXEC 0x5000` for PRINT |
+| Tool names | Use `TEXEC 0x5000` for PRINT (with newline), `TEXEC 0x5001` for PRINTN (no newline) |
 
 **Print Examples:**
 ```asm
-# PRINT (no newline)
+# PRINT (with newline) - 0x5000
 SETS 255, "Hello"
-TEXEC 0x5000, 255, 0
+TEXEC 0x5000, 255, 0   # Output: Hello\n
 
-# PRINTLN (with newline)
+# PRINTN (no newline) - 0x5001
 SETS 255, "World"
-TEXEC 0x5001, 255, 0
+TEXEC 0x5001, 255, 0   # Output: World (no newline)
 
-# Print integer
+# Print integer with newline
 SET 10, 42
-ITOA 11, 10          # R11 = "42"
-TEXEC 0x5001, 11, 0  # Print "42\n"
+ITOA 11, 10            # R11 = "42"
+TEXEC 0x5000, 11, 0    # Print "42\n"
 ```
 
 ### Control Flow
@@ -2271,7 +2284,7 @@ This script builds all workspace crates and creates a distribution package in `d
 .
 ├── Cargo.toml              # Workspace configuration
 ├── crates/                 # Core components
-│   ├── l0_core/            # ISA Definition (52 instructions)
+│   ├── l0_core/            # ISA Definition (56 instructions)
 │   ├── l0_vm/              # Virtual Machine
 │   ├── l0_asm/             # Assembler
 │   └── l0_compiler/        # AOT Compiler

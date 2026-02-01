@@ -128,7 +128,8 @@ fn main() {
 
             // Control
             "CMP" => Instruction::CMP { r1: parse_u8(args, 0), r2: parse_u8(args, 1) },
-            
+            "SCMP" => Instruction::SCMP { s1: parse_u8(args, 0), s2: parse_u8(args, 1) },
+
             // Jumps with Label Resolution
             "JMP" => Instruction::JMP { target: resolve_label(&args[0], &labels) },
             "BEQ" => Instruction::BEQ { target: resolve_label(&args[0], &labels) },
@@ -137,6 +138,7 @@ fn main() {
 
             // Memory
             "NEW" => Instruction::NEW { dest: parse_u8(args, 0), size: parse_usize(args, 1) },
+            "NEWR" => Instruction::NEWR { dest: parse_u8(args, 0), size_reg: parse_u8(args, 1) },
             "FREE" => Instruction::FREE { ptr: parse_u8(args, 0) },
             "READ" => Instruction::READ { dest: parse_u8(args, 0), ptr: parse_u8(args, 1), offset: parse_usize(args, 2) },
             "WRITE" => Instruction::WRITE { ptr: parse_u8(args, 0), offset: parse_usize(args, 1), val: parse_u8(args, 2) },
