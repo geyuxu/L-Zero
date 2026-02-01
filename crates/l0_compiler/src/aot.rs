@@ -161,6 +161,25 @@ static void heap_free(int64_t ptr) {
     }
 }
 
+// Watermark format: (bump << 32) | next_ptr
+static int64_t heap_mark(void) {
+    return ((int64_t)heap_bump << 32) | (next_ptr & 0xFFFFFFFF);
+}
+
+static void heap_reset(int64_t watermark) {
+    size_t saved_bump = (watermark >> 32) & 0xFFFFFFFF;
+    int64_t saved_next_ptr = watermark & 0xFFFFFFFF;
+
+    if (saved_bump <= heap_bump) {
+        // Invalidate all allocations after the watermark
+        for (int64_t i = saved_next_ptr; i < next_ptr; i++) {
+            allocations[i].used = 0;
+        }
+        heap_bump = saved_bump;
+        next_ptr = saved_next_ptr;
+    }
+}
+
 "#);
 
     // TEXEC proxy - key feature for dynamic plugin support
@@ -749,5 +768,12 @@ fn generate_instruction(instr: &Instruction, _line: usize, _tools: &HashMap<u16,
         fprintf(stderr, "[GOVERNANCE] YIELD response stored in R{dest}\n");
     }}
 "#, query = query, dest = dest),
+
+        // Memory Watermark (Arena-style Reset)
+        Instruction::MARK { dest } => format!(r#"    regs[{dest}] = heap_mark();
+"#, dest = dest),
+
+        Instruction::RESET { limit } => format!(r#"    heap_reset(regs[{limit}]);
+"#, limit = limit),
     }
 }

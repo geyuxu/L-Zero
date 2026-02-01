@@ -34,7 +34,6 @@ rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR/bin"
 mkdir -p "$DIST_DIR/lib/l0/plugins"
 mkdir -p "$DIST_DIR/config"
-mkdir -p "$DIST_DIR/stdlib"
 
 # Step 3: Copy binaries (dynamically from workspace)
 echo "[3/5] Copying binaries..."
@@ -63,19 +62,13 @@ echo "[4/5] Generating configuration..."
 # Transform: "target/release/xxx_plugin" -> "lib/l0/plugins/xxx_plugin"
 sed 's|"target/release/\([^"]*\)"|"lib/l0/plugins/\1"|g' tools.json > "$DIST_DIR/config/tools.json"
 
-# Step 5: Copy stdlib and docs
-echo "[5/5] Copying stdlib and documentation..."
+# Step 5: Copy documentation
+echo "[5/5] Copying documentation..."
 
-# Copy stdlib (pattern library for AI agents)
-if [ -d "stdlib" ]; then
-    cp -r stdlib/* "$DIST_DIR/stdlib/"
-    echo "  stdlib: $(ls stdlib | wc -l | tr -d ' ') files"
-fi
-
-# Copy documentation (full README.md as DOCS.md)
+# Copy documentation (README.md contains full ISA reference and stdlib patterns)
 if [ -f "README.md" ]; then
-    cp README.md "$DIST_DIR/DOCS.md"
-    echo "  doc: DOCS.md (full ISA reference)"
+    cp README.md "$DIST_DIR/README.md"
+    echo "  doc: README.md (full ISA reference + stdlib patterns)"
 fi
 
 # Install script
@@ -110,8 +103,7 @@ $SUDO mkdir -p "$PREFIX"
 $SUDO cp -r "$SCRIPT_DIR/bin" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/lib" "$PREFIX/"
 $SUDO cp -r "$SCRIPT_DIR/config" "$PREFIX/"
-$SUDO cp -r "$SCRIPT_DIR/stdlib" "$PREFIX/"
-[ -f "$SCRIPT_DIR/DOCS.md" ] && $SUDO cp "$SCRIPT_DIR/DOCS.md" "$PREFIX/"
+[ -f "$SCRIPT_DIR/README.md" ] && $SUDO cp "$SCRIPT_DIR/README.md" "$PREFIX/"
 
 $SUDO chmod +x "$PREFIX/bin/"*
 $SUDO chmod +x "$PREFIX/lib/l0/plugins/"*
@@ -142,79 +134,6 @@ else
 fi
 INSTALL_EOF
 chmod +x "$DIST_DIR/install.sh"
-
-# README
-cat > "$DIST_DIR/README.md" << 'README_EOF'
-# L-0 Language
-
-L-0 is a low-level instruction set designed for AI agents.
-
-## Quick Install
-
-```bash
-# User installation (recommended)
-./install.sh              # Install to ~/.l0
-
-# System installation (requires sudo)
-./install.sh --system     # Install to /usr/local/l0
-
-# Custom path
-./install.sh /opt/l0
-```
-
-### User Installation
-Add to your shell profile (~/.bashrc or ~/.zshrc):
-```bash
-export L0_HOME="$HOME/.l0"
-export PATH="$L0_HOME/bin:$PATH"
-```
-
-### System Installation
-Binaries are symlinked to /usr/local/bin. Just set:
-```bash
-export L0_HOME="/usr/local/l0"
-```
-
-## Usage
-
-```bash
-# Compile assembly to bytecode (example from DOCS.md)
-l0asm hello.asm > hello.l0
-
-# Execute bytecode
-l0vm hello.l0
-
-# AOT compile to C (optional)
-l0cc hello.l0 -o hello.c
-gcc -O2 hello.c -o hello
-./hello
-```
-
-## Included Tools
-
-| Binary | Description |
-|--------|-------------|
-| `l0vm` | Virtual Machine - executes .l0 bytecode |
-| `l0asm` | Assembler - compiles .asm to .l0 |
-| `l0cc` | AOT Compiler - compiles .l0 to C |
-
-## Plugins
-
-Plugins are located in `lib/l0/plugins/`:
-- `file_plugin` - File I/O operations
-- `data_plugin` - JSON operations
-- `http_plugin` - HTTP server
-- `db_plugin` - SQLite database
-
-## Documentation
-
-- **DOCS.md** - Full ISA reference, tool registry, and programming guide (included)
-- Online: https://github.com/geyuxu/ai-programming-lang
-
-## License
-
-MIT
-README_EOF
 
 # Create tarball
 echo ""
