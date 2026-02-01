@@ -23,4 +23,4 @@ Cargo.lock
 # Compiled bytecode
 *.l0
 
-private-docs/
+#private-docs/

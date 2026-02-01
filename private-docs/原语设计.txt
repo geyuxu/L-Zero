@@ -1,0 +1,107 @@
+这是基于“外科手术式分析”后修正的 L-Zero (Axon) v0.2 指令集定义。
+这次更新的核心在于**“补漏洞”**：
+ * 新增 ASSERT：响应“显式失败”需求，支持形式化验证。
+ * 新增 SETS：方便 AI 直接在代码里写字符串字面量（String Literals）。
+ * 强化内存与正则的语义约束注释。
+总共 30 个 原子指令。请直接使用这份定义更新你的 Rust 代码。
+L-Zero ISA v0.2 Specification
+1. System & Lifecycle (系统与生命周期)
+ * NOP: 空操作。
+ * HALT: 正常停机。
+ * PANIC: 异常崩溃（AI 遇到无法处理的状况）。
+ * DUMP: 调试用，打印状态。
+ * GAS: 查询剩余燃料。
+ * ASSERT reg (NEW): 断言。如果 reg == 0 (False)，则触发 Panic。这是 AI 表达“我确信这里应该是这样”的关键原语。
+2. Registers (寄存器操作)
+ * SET reg, i64: 存入整数。
+ * SETS reg, string (NEW): 存入字符串字面量。
+   * 行为：在堆上申请空间，存入字符串，将指针(ID) 存入寄存器。
+ * MOV dest, src: 寄存器复制。
+ * SWAP r1, r2: 交换。
+3. Arithmetic (算术 - 纯整数/确定性)
+ * ADD dest, s1, s2
+ * SUB dest, s1, s2
+ * MUL dest, s1, s2
+ * DIV dest, s1, s2: 遇到除以 0 会触发 Panic。
+ * MOD dest, s1, s2: 取模。
+4. Bitwise Logic (位逻辑)
+ * AND dest, s1, s2
+ * OR  dest, s1, s2
+ * XOR dest, s1, s2
+ * NOT dest, src
+5. Control Flow (控制流 - 图灵完备基石)
+ * CMP r1, r2: 比较。更新内部标志位 (Equal, Greater, Less)。
+ * JMP target: 无条件跳转。
+ * BEQ target: (Branch Equal) 相等则跳。
+ * BGT target: (Branch Greater) 大于则跳。
+ * BLT target: (Branch Less) 小于则跳。
+6. Heap Memory (内存 - 运行时安全强制)
+ * NEW dest, size: 申请 Vec<u8>。返回 Pointer ID。
+ * FREE ptr: 标记内存为 Inactive。注意：防止 Use-After-Free。
+ * READ dest, ptr, offset: 读取字节。强制越界检查。
+ * WRITE ptr, offset, val: 写入字节。强制越界检查。
+7. AI-Native Extensions (核心扩展)
+ * REGEX dest, pattern_ptr, text_ptr:
+   * 约束：必须使用 Re2 (线性时间) 引擎。禁止回溯。返回 1 (Match) 或 0 (No Match)。
+ * TEXEC tool_id, arg_ptr, ret_dest:
+   * 约束：副作用必须是确定性的 (Deterministic Semantics)。
+Rust Implementation (直接复制)
+这是更新后的 Instruction 枚举，兼容 serde 序列化，可以直接解析 JSON。
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(tag = "op", content = "args")]
+pub enum Instruction {
+    // === 1. System ===
+    NOP,
+    HALT,
+    PANIC(String), // 允许 AI 留下遗言，例如 PANIC("Invalid Input")
+    DUMP,
+    GAS(u8),       // 将当前 Gas 存入 reg
+    ASSERT(u8),    // NEW: 验证寄存器值，0 则 Panic
+
+    // === 2. Registers ===
+    SET { reg: u8, val: i64 },
+    SETS { reg: u8, val: String }, // NEW: 字符串字面量支持
+    MOV { dest: u8, src: u8 },
+    SWAP { r1: u8, r2: u8 },
+
+    // === 3. Arithmetic (Integer Only) ===
+    ADD { dest: u8, s1: u8, s2: u8 },
+    SUB { dest: u8, s1: u8, s2: u8 },
+    MUL { dest: u8, s1: u8, s2: u8 },
+    DIV { dest: u8, s1: u8, s2: u8 },
+    MOD { dest: u8, s1: u8, s2: u8 },
+
+    // === 4. Logic ===
+    AND { dest: u8, s1: u8, s2: u8 },
+    OR  { dest: u8, s1: u8, s2: u8 },
+    XOR { dest: u8, s1: u8, s2: u8 },
+    NOT { dest: u8, src: u8 },
+
+    // === 5. Control Flow ===
+    CMP { r1: u8, r2: u8 },
+    JMP { target: usize }, // 使用绝对行号，编译器层解决 Label
+    BEQ { target: usize },
+    BGT { target: usize },
+    BLT { target: usize },
+
+    // === 6. Memory (Safe Heap) ===
+    NEW { dest: u8, size: usize },
+    FREE { ptr: u8 },
+    READ { dest: u8, ptr: u8, offset: usize },
+    WRITE { ptr: u8, offset: usize, val: u8 },
+
+    // === 7. Extensions ===
+    // regex_ptr 指向 pattern 字符串, text_ptr 指向目标文本
+    REGEX { dest: u8, pat: u8, text: u8 }, 
+    
+    // tool_id: 工具ID, arg: 参数字符串指针, dest: 返回值字符串指针存放处
+    TEXEC { tool: u16, arg: u8, dest: u8 },
+}
+
+关键变更说明 (写在 Commit Message 里)
+ * Added ASSERT: 这是一个巨大的语义提升。现在 Agent 可以写出 CMP R0, 10; ASSERT R0 这样的逻辑，如果环境不符合预期，直接自杀（Panic），保证了执行的安全性和可验证性。
+ * Added SETS: 之前 AI 很难把 "Hello" 这种字符串放进内存。现在一条指令搞定，极大降低了 LLM 生成代码的难度（Syntactic Complexity）。
+ * Removed nothing: 保持了向后的兼容性（虽然你还没有历史包袱）。
+现在，拿着这个 enum，让 AI 开始重构 vm.rs 的 run 循环吧！
