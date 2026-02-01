@@ -98,12 +98,19 @@ fn handle_request(request: &str) -> String {
 
         "json_parse" => {
             // 解析 JSON 并提取字段
-            // args[0] = JSON 字符串, args[1] = 字段路径 (如 "user.name")
-            if args.len() >= 2 {
-                let value = extract_json_field(&args[0], &args[1]);
-                format!(r#"{{"ok":true,"value":"{}"}}"#, escape_json(&value))
+            // Format: "json_str|field_path" (single pipe-separated arg)
+            if let Some(arg) = args.get(0) {
+                // Split by LAST pipe (json may contain pipes in values)
+                if let Some(pipe_pos) = arg.rfind('|') {
+                    let json = &arg[..pipe_pos];
+                    let field = &arg[pipe_pos + 1..];
+                    let value = extract_json_field(json, field);
+                    format!(r#"{{"ok":true,"value":"{}"}}"#, escape_json(&value))
+                } else {
+                    r#"{"ok":false,"error":"usage: json_parse json_str|field_path"}"#.to_string()
+                }
             } else {
-                r#"{"ok":false,"error":"usage: json_parse json_str field_path"}"#.to_string()
+                r#"{"ok":false,"error":"usage: json_parse json_str|field_path"}"#.to_string()
             }
         }
 
@@ -131,13 +138,32 @@ fn extract_json_field(json: &str, path: &str) -> String {
             let rest = rest.trim_start();
 
             if rest.starts_with('"') {
-                // String value
+                // String value - handle escaped quotes
                 let inner = &rest[1..];
-                if let Some(end) = inner.find('"') {
-                    current = inner[..end].to_string();
-                } else {
-                    return String::new();
+                let mut result = String::new();
+                let mut chars = inner.chars().peekable();
+                while let Some(c) = chars.next() {
+                    if c == '\\' {
+                        if let Some(next) = chars.next() {
+                            match next {
+                                '"' => result.push('"'),
+                                '\\' => result.push('\\'),
+                                'n' => result.push('\n'),
+                                'r' => result.push('\r'),
+                                't' => result.push('\t'),
+                                _ => {
+                                    result.push('\\');
+                                    result.push(next);
+                                }
+                            }
+                        }
+                    } else if c == '"' {
+                        break;
+                    } else {
+                        result.push(c);
+                    }
                 }
+                current = result;
             } else if rest.starts_with('{') {
                 // Object value
                 let mut depth = 0;
