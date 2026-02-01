@@ -1,4 +1,4 @@
-# L-0 Application Binary Interface (ABI) v1.0
+# L-0 Application Binary Interface (ABI) Preview
 
 ## Register Convention
 
@@ -233,4 +233,4 @@ After Pattern:   SET 50, 0         # CHECK_ERR
 
 ---
 
-*L-0 ABI v1.0 | For AI Agent code generation*
+*L-0 ABI Preview | For AI Agent code generation*

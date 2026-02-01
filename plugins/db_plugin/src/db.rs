@@ -189,18 +189,33 @@ fn cmd_insert(args: &[String]) -> String {
     let db = DB.lock().unwrap();
     let conn = match db.as_ref() {
         Some(c) => c,
-        None => return json!({"ok": false, "error": "Database not initialized"}).to_string(),
+        None => return json!({
+            "ok": false,
+            "error": "Database not initialized. Call DB_INIT (0x9000) first with database path.",
+            "hint": "SETS 255, \"app.db\"\nTEXEC 0x9000, 255, 0"
+        }).to_string(),
     };
 
     let arg = match args.get(0) {
         Some(s) => s,
-        None => return json!({"ok": false, "error": "Usage: insert table|{json} or table|cols|vals"}).to_string(),
+        None => return json!({
+            "ok": false,
+            "error": "Missing arguments for INSERT",
+            "usage": "table|{json} or table|cols|vals",
+            "examples": ["articles|{\"title\":\"Hello\"}", "articles|title,content|Hello,World"]
+        }).to_string(),
     };
 
     let parts: Vec<&str> = arg.splitn(3, '|').collect();
 
     if parts.len() < 2 {
-        return json!({"ok": false, "error": "Usage: insert table|{json} or table|cols|vals"}).to_string();
+        return json!({
+            "ok": false,
+            "error": "Invalid INSERT format",
+            "got": arg,
+            "usage": "table|{json} or table|cols|vals",
+            "examples": ["articles|{\"title\":\"Hello\"}", "articles|title,content|Hello,World"]
+        }).to_string();
     }
 
     let table = parts[0];
@@ -288,12 +303,21 @@ fn cmd_select(args: &[String]) -> String {
     let db = DB.lock().unwrap();
     let conn = match db.as_ref() {
         Some(c) => c,
-        None => return json!({"ok": false, "error": "Database not initialized"}).to_string(),
+        None => return json!({
+            "ok": false,
+            "error": "Database not initialized. Call DB_INIT (0x9000) first.",
+            "hint": "SETS 255, \"app.db\"\nTEXEC 0x9000, 255, 0"
+        }).to_string(),
     };
 
     let arg = match args.get(0) {
         Some(s) => s,
-        None => return json!({"ok": false, "error": "Usage: select table[|condition[|columns]]"}).to_string(),
+        None => return json!({
+            "ok": false,
+            "error": "Missing table name for SELECT",
+            "usage": "table or table|condition or table|condition|columns",
+            "examples": ["articles", "articles|id>5", "articles|status=active|id,title"]
+        }).to_string(),
     };
 
     let parts: Vec<&str> = arg.splitn(3, '|').collect();
@@ -310,7 +334,12 @@ fn cmd_select(args: &[String]) -> String {
 
     match query_to_json(conn, &sql) {
         Ok(results) => json!({"ok": true, "value": results}).to_string(),
-        Err(e) => json!({"ok": false, "error": format!("SELECT failed: {}", e)}).to_string(),
+        Err(e) => json!({
+            "ok": false,
+            "error": format!("SELECT failed: {}", e),
+            "sql": sql,
+            "hint": "Check table name exists and condition syntax is valid SQL"
+        }).to_string(),
     }
 }
 
@@ -383,18 +412,33 @@ fn cmd_delete(args: &[String]) -> String {
     let db = DB.lock().unwrap();
     let conn = match db.as_ref() {
         Some(c) => c,
-        None => return json!({"ok": false, "error": "Database not initialized"}).to_string(),
+        None => return json!({
+            "ok": false,
+            "error": "Database not initialized. Call DB_INIT (0x9000) first.",
+            "hint": "SETS 255, \"app.db\"\nTEXEC 0x9000, 255, 0"
+        }).to_string(),
     };
 
     let arg = match args.get(0) {
         Some(s) => s,
-        None => return json!({"ok": false, "error": "Usage: delete table|condition"}).to_string(),
+        None => return json!({
+            "ok": false,
+            "error": "Missing arguments for DELETE",
+            "usage": "table|condition",
+            "examples": ["articles|id=5", "users|status=inactive"]
+        }).to_string(),
     };
 
     let parts: Vec<&str> = arg.splitn(2, '|').collect();
 
     if parts.len() < 2 {
-        return json!({"ok": false, "error": "Usage: delete table|condition"}).to_string();
+        return json!({
+            "ok": false,
+            "error": "Invalid DELETE format - missing condition",
+            "got": arg,
+            "usage": "table|condition",
+            "examples": ["articles|id=5", "users|created_at<'2024-01-01'"]
+        }).to_string();
     }
 
     let table = parts[0];

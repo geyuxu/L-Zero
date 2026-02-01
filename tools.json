@@ -1,5 +1,5 @@
 {
-    "$schema": "L-0 Tool Registry v1.0",
+    "$version": "L-0 Tool Registry Preview",
     "$doc": "工具注册表 - VM 通过 TEXEC 指令调用此处定义的工具",
 
     "$architecture": {
@@ -48,12 +48,7 @@
         "0x500D": { "name": "LOWER", "type": "builtin", "desc": "Lowercase string" },
         "0x500E": { "name": "TRIM", "type": "builtin", "desc": "Trim whitespace" },
         "0x500A": { "name": "SUBSTR", "type": "builtin", "desc": "Substring (str,start,len)" },
-        "0x500B": { "name": "SPLIT", "type": "builtin", "desc": "Split string by delimiter" },
-
-        "$deprecated": {
-            "0x5004": { "name": "STRLEN", "note": "Use ISA HLEN instead" },
-            "0x5009": { "name": "CONCAT", "note": "Use ISA SCAT instead" }
-        }
+        "0x500B": { "name": "SPLIT", "type": "builtin", "desc": "Split string by delimiter" }
     },
 
     "plugins": {
@@ -91,6 +86,8 @@
         "0x8005": { "name": "HTTP_LIST_ROUTES", "type": "plugin", "binary": "target/release/http_plugin", "method": "list_routes" },
         "0x8006": { "name": "HTTP_STATIC", "type": "plugin", "binary": "target/release/http_plugin", "method": "static", "desc": "Set static file directory" },
         "0x8007": { "name": "HTTP_DB", "type": "plugin", "binary": "target/release/http_plugin", "method": "db", "desc": "Set database path for CRUD operations" },
+        "0x8008": { "name": "HTTP_LISTEN", "type": "plugin", "binary": "target/release/http_plugin", "method": "listen", "desc": "Wait for request, return {method, path, body, addr}" },
+        "0x8009": { "name": "HTTP_SEND", "type": "plugin", "binary": "target/release/http_plugin", "method": "send", "desc": "Send response for pending request" },
 
         "0x3000": { "name": "AI_EMBED", "type": "plugin", "binary": "target/release/ai_plugin", "method": "embed", "note": "Optional" },
         "0x3004": { "name": "AI_GENERATE", "type": "plugin", "binary": "target/release/ai_plugin", "method": "generate", "note": "Optional" }

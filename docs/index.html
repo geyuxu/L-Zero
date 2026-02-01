@@ -32,33 +32,27 @@
             top: 0;
             right: 0;
             z-index: 1000;
-        }
-
-        .github-ribbon a {
-            display: block;
             width: 150px;
             height: 150px;
             overflow: hidden;
         }
 
-        .github-ribbon a span {
+        .github-ribbon .ribbon-text {
             position: absolute;
             display: block;
             width: 225px;
             padding: 8px 0;
-            background: #238636;
+            background: #6e7681;
             color: #fff;
             font-size: 13px;
             font-weight: 600;
             text-align: center;
-            text-decoration: none;
             transform: rotate(45deg);
             top: 42px;
             right: -55px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            cursor: default;
         }
-
-        .github-ribbon a:hover span { background: #2ea043; }
 
         .container {
             max-width: 900px;
@@ -125,6 +119,14 @@
         }
 
         .btn-secondary:hover { border-color: var(--text-secondary); }
+
+        .btn-disabled {
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
 
         /* Sections */
         section {
@@ -319,9 +321,7 @@
 </head>
 <body>
     <div class="github-ribbon">
-        <a href="https://github.com/geyuxu/L-Zero" target="_blank" rel="noopener">
-            <span>View on GitHub</span>
-        </a>
+        <span class="ribbon-text">Coming Soon</span>
     </div>
 
     <!-- Hero -->
@@ -335,8 +335,8 @@
                 and watch it build.
             </p>
             <div class="cta-buttons">
-                <a href="https://github.com/geyuxu/L-Zero/releases" class="btn btn-primary">Download</a>
-                <a href="https://github.com/geyuxu/L-Zero/blob/main/BOOT.md" class="btn btn-secondary">BOOT.md</a>
+                <span class="btn btn-disabled">Download (Coming Soon)</span>
+                <span class="btn btn-disabled">README.md (Coming Soon)</span>
             </div>
         </div>
     </header>
@@ -359,8 +359,8 @@
                 <div class="workflow-step">
                     <div class="step-number">2</div>
                     <div class="step-content">
-                        <h3>Give Your AI the BOOT.md</h3>
-                        <p>BOOT.md is the complete language specification. Paste it into your AI's context (Claude, GPT, etc.) so it understands how to write L-Zero programs.</p>
+                        <h3>Give Your AI the README.md</h3>
+                        <p>README.md is the complete language specification. Paste it into your AI's context (Claude, GPT, etc.) so it understands how to write L-Zero programs.</p>
                     </div>
                 </div>
 
@@ -377,7 +377,7 @@
                 <div class="arch-flow">
                     <div class="arch-box ai">Your Prompt</div>
                     <div class="arch-arrow">+</div>
-                    <div class="arch-box">BOOT.md</div>
+                    <div class="arch-box">README.md</div>
                     <div class="arch-arrow">→</div>
                     <div class="arch-box ai">AI Agent</div>
                     <div class="arch-arrow">→</div>
@@ -423,12 +423,12 @@ HALT</code></pre>
 
                 <div class="feature-card">
                     <h3>Type-Safe by Design</h3>
-                    <p>52 instructions, each with a strict schema. If it compiles, it runs. No runtime type errors. No undefined behavior.</p>
+                    <p>54 instructions, each with a strict schema. If it compiles, it runs. No runtime type errors. No undefined behavior.</p>
                 </div>
 
                 <div class="feature-card">
                     <h3>Self-Describing</h3>
-                    <p>BOOT.md is both documentation and specification. AI reads it once and knows everything: ISA, tools, plugins, examples.</p>
+                    <p>README.md is both documentation and specification. AI reads it once and knows everything: ISA, tools, plugins, examples.</p>
                 </div>
 
                 <div class="feature-card">
@@ -473,7 +473,7 @@ HALT</code></pre>
                 </div>
                 <div class="principle">
                     <h4>Extensible Tools</h4>
-                    <p>Core ISA (52 instructions) + unlimited plugins. Add capabilities without changing the language.</p>
+                    <p>Core ISA (54 instructions) + unlimited plugins. Add capabilities without changing the language.</p>
                 </div>
             </div>
 
@@ -494,15 +494,15 @@ HALT</code></pre>
                     <h3>1. Download</h3>
                     <p>Grab the latest release for your platform from GitHub Releases. Includes all binaries and plugins.</p>
                     <p style="margin-top: 16px;">
-                        <a href="https://github.com/geyuxu/L-Zero/releases" class="btn btn-primary" style="display: inline-block;">Download Release</a>
+                        <span class="btn btn-disabled" style="display: inline-block;">Coming Soon</span>
                     </p>
                 </div>
 
                 <div class="feature-card">
-                    <h3>2. Get BOOT.md</h3>
-                    <p>Copy BOOT.md into your AI's context. This is the complete language reference - ISA, tools, examples, everything.</p>
+                    <h3>2. Get README.md</h3>
+                    <p>Copy README.md into your AI's context. This is the complete language reference - ISA, tools, examples, everything.</p>
                     <p style="margin-top: 16px;">
-                        <a href="https://github.com/geyuxu/L-Zero/blob/main/BOOT.md" class="btn btn-secondary" style="display: inline-block;">View BOOT.md</a>
+                        <span class="btn btn-disabled" style="display: inline-block;">Coming Soon</span>
                     </p>
                 </div>
             </div>
@@ -521,13 +521,11 @@ l0vm my_app.l0</code></pre>
     <footer>
         <div class="container">
             <p style="font-size: 1.2rem; color: var(--text-primary); margin-bottom: 16px;">
-                L-Zero v1.0 — The Native Language of AI Agents
+                L-Zero Preview — The Native Language of AI Agents
             </p>
             <p>
-                <a href="https://github.com/geyuxu/L-Zero">GitHub</a> ·
-                <a href="https://github.com/geyuxu/L-Zero/blob/main/BOOT.md">BOOT.md</a> ·
-                <a href="https://github.com/geyuxu/L-Zero/releases">Releases</a> ·
-                <a href="https://github.com/geyuxu/L-Zero/blob/main/LICENSE">MIT License</a>
+                <span style="color: var(--text-secondary);">GitHub (Coming Soon)</span> ·
+                <span style="color: var(--text-secondary);">MIT License</span>
             </p>
             <p style="margin-top: 24px; font-size: 0.9rem;">
                 You describe. AI builds. Machine executes.

@@ -150,4 +150,4 @@ fibonacci_2_done:
 
 ---
 
-*L-0 Standard Library v1.0 | For AI Agent code generation*
+*L-0 Standard Library Preview | For AI Agent code generation*

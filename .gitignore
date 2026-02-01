@@ -22,6 +22,3 @@ Cargo.lock
 
 # Compiled bytecode
 *.l0
-
-# Legacy (can be removed after migration cleanup)
-l0_database.json

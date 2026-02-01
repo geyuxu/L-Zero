@@ -185,9 +185,6 @@ static char* texec_builtin(int tool_id, const char* arg) {
         case 0x5003: // RAND
             snprintf(buf, sizeof(buf), "%ld", (long)(rand() % (atol(arg) ?: 100)));
             break;
-        case 0x5004: // STRLEN
-            snprintf(buf, sizeof(buf), "%lu", (unsigned long)strlen(arg));
-            break;
         case 0x5005: // ABS
             snprintf(buf, sizeof(buf), "%ld", labs(atol(arg)));
             break;
@@ -207,15 +204,6 @@ static char* texec_builtin(int tool_id, const char* arg) {
             break;
         case 0x5008: // TIME
             snprintf(buf, sizeof(buf), "%ld", (long)time(NULL));
-            break;
-        case 0x5009: // CONCAT
-            {
-                const char* comma = strchr(arg, ',');
-                if (comma) {
-                    int len1 = comma - arg;
-                    snprintf(buf, sizeof(buf), "%.*s%s", len1, arg, comma + 1);
-                }
-            }
             break;
         case 0x500C: // UPPER
             for (int i = 0; arg[i] && i < sizeof(buf)-1; i++)
