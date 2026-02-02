@@ -70,6 +70,7 @@ L249-251 LOWER 同理。
 
 **完成标志**：`grep -c "54" README.md` 涉及指令计数的结果为 0。
 
+DONE
 ---
 
 ## Day 2（周二）：FILE_EXISTS + 示例一致性
@@ -189,6 +190,8 @@ HALT
 
 **完成标志**：上述测试通过。
 
+DONE
+
 ---
 
 ## Day 4（周四）：冒烟测试 + README 校对
@@ -266,6 +269,7 @@ done
 
 **完成标志**：3 个示例文件全部编译运行通过，校对清单全部打勾。
 
+DONE
 ---
 
 ## Day 5（周五）：开源准备
@@ -290,7 +294,7 @@ Permission is hereby granted, free of charge, to any person obtaining a copy
 ```markdown
 # Changelog
 
-## v0.2.0-preview (2026-02-08)
+## v0.0.2-preview (2026-02-08)
 
 ### New Instructions
 - `SCMP` - String content comparison (sets flags like CMP but compares heap strings)
@@ -312,7 +316,7 @@ Permission is hereby granted, free of charge, to any person obtaining a copy
 - HTTP dynamic mode uses file-based IPC
 - See roadmap for planned improvements
 
-## v0.1.0 (initial)
+## v0.0.1 (initial)
 - 54-instruction ISA
 - VM interpreter + AOT compiler
 - 4 plugins: file, data, http, db

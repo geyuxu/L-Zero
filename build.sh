@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="0.0.1"
+VERSION="0.0.2-preview"
 PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 case "$ARCH" in

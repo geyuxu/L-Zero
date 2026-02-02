@@ -14,6 +14,7 @@ Cargo.lock
 # Runtime config files
 .l0_db_config.json
 .l0_http_config.json
+.l0_http_pending_*.json
 
 # SQLite database files
 *.db
@@ -22,5 +23,13 @@ Cargo.lock
 
 # Compiled bytecode
 *.l0
+*.l0b
+
+# Temporary files
+/tmp/
+
+# C/C++ build artifacts
+*.o
+*.out
 
 #private-docs/
