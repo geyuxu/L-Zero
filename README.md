@@ -71,7 +71,7 @@ L-0 is a **NON-STANDARD** virtual machine.
 
 ```
 +---------------------------------------------------------------+
-| Layer 1: ISA Core (54 primitives)                             |
+| Layer 1: ISA Core (56 primitives)                             |
 | ------------------------------------------------------------- |
 | - Register-based operations, compiled into VM                 |
 | - Fast, direct execution                                      |
@@ -115,7 +115,7 @@ L-0 is a **NON-STANDARD** virtual machine.
 └─────────────┴──────────────────────────────────────────────┘
 ```
 
-### The Holographic ISA (54 Instructions)
+### The Holographic ISA (56 Instructions)
 
 > **Every instruction shows its semantic execution. If you can't see the pseudocode, you don't understand the operation.**
 
@@ -125,8 +125,8 @@ L-0 is a **NON-STANDARD** virtual machine.
 | Registers | 4 | SET, SETS, MOV, SWAP |
 | Math | 5 | ADD, SUB, MUL, DIV, MOD |
 | Logic | 4 | AND, OR, XOR, NOT |
-| Control | 5 | CMP, JMP, BEQ, BGT, BLT |
-| Memory | 8 | NEW, FREE, READ, WRITE, READR, WRITER, STORE64, LOAD64 |
+| Control | 6 | CMP, SCMP, JMP, BEQ, BGT, BLT |
+| Memory | 9 | NEW, NEWR, FREE, READ, WRITE, READR, WRITER, STORE64, LOAD64 |
 | Batch | 4 | MEMCPY, HLEN, SLICE, MEMSET |
 | Extensions | 5 | TEXEC, ITOA, ATOI, SCAT, REGEX |
 | Vector | 7 | VNEW, VSET, VGET, VDOT, VSIM, VMAG, VNORM |
@@ -321,7 +321,7 @@ TEXEC 0x5000, 3, 0          # "Current time: 1706745600"
 | `0x4001` | FILE_WRITE | "path\|content" | `write_file(path, content)` |
 | `0x4003` | FILE_DELETE | "path" | `delete_file(path)` |
 | `0x4004` | FILE_LIST | "dir" | `regs[dest] = list_dir(dir)` |
-| `0x4005` | FILE_EXISTS | "path" | `regs[dest] = exists(path) ? "1" : "0"` |
+| `0x4005` | FILE_EXISTS | "path" | `regs[dest] = exists(path) ? "true" : "false"` |
 
 ```asm
 # Example: Read and print file
@@ -2300,4 +2300,4 @@ This script builds all workspace crates and creates a distribution package in `d
 
 ---
 
-*L-0 Preview | 54 ISA Primitives | Semantic Computing | The Language of Autonomous AI*
+*L-0 Preview | 56 ISA Primitives | Semantic Computing | The Language of Autonomous AI*
