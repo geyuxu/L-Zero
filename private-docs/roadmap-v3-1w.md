@@ -391,23 +391,22 @@ Permission is hereby granted, free of charge, to any person obtaining a copy
 | 字段 | 填写内容 |
 |------|----------|
 | Title | L-Zero: An ISA-Level Virtual Machine for AI Agent Code Generation with Semantic Drift Governance |
-| Authors | [你的全名], ORCID: [你的 ORCID] |
+| Authors | Yuxu.Ge, ORCID: 0009-0008-2990-4886 |
 | Description | L-Zero (L-0) is a register-based virtual machine designed for AI code generation. It features a 56-instruction ISA, AOT compilation to C, a plugin architecture for database/HTTP/file operations, and an ISA-level semantic drift governance mechanism (LATCH/GUARD/TRAP/YIELD) for autonomous AI agents. |
 | Keywords | AI code generation, virtual machine, assembly language, semantic drift detection, agent governance, LLM |
 | License | MIT |
 | Resource type | Software |
-| Version | v0.2.0-preview |
-| Related identifiers | (如有论文或博客链接) |
+| Version | v0.0.2 |
 
 ### 6.3 获取 DOI
 
-Zenodo 生成后记录 DOI（格式：`10.5281/zenodo.XXXXXXX`）。
+Zenodo 生成后记录 DOI（格式：`https://doi.org/10.5281/zenodo.18463001`）。
 
 ### 6.4 回填 DOI
 
 在 README.md 顶部加一行 badge：
 ```markdown
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18463001.svg)](https://doi.org/10.5281/zenodo.18463001)
 ```
 
 在个人网站 yuxu.ge 和简历中添加引用。
