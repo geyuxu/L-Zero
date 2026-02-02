@@ -243,12 +243,20 @@ static char* texec_builtin(int tool_id, const char* arg) {
             snprintf(buf, sizeof(buf), "%ld", (long)time(NULL));
             break;
         case 0x500C: // UPPER
-            for (int i = 0; arg[i] && i < sizeof(buf)-1; i++)
-                buf[i] = (arg[i] >= 'a' && arg[i] <= 'z') ? arg[i] - 32 : arg[i];
+            {
+                int i;
+                for (i = 0; arg[i] && i < sizeof(buf)-1; i++)
+                    buf[i] = (arg[i] >= 'a' && arg[i] <= 'z') ? arg[i] - 32 : arg[i];
+                buf[i] = '\0';
+            }
             break;
         case 0x500D: // LOWER
-            for (int i = 0; arg[i] && i < sizeof(buf)-1; i++)
-                buf[i] = (arg[i] >= 'A' && arg[i] <= 'Z') ? arg[i] + 32 : arg[i];
+            {
+                int i;
+                for (i = 0; arg[i] && i < sizeof(buf)-1; i++)
+                    buf[i] = (arg[i] >= 'A' && arg[i] <= 'Z') ? arg[i] + 32 : arg[i];
+                buf[i] = '\0';
+            }
             break;
         case 0x500E: // TRIM
             {
