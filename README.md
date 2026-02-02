@@ -335,10 +335,9 @@ TEXEC 0x4001, 1, 0          # Write to output.txt
 
 # Example: Check if file exists
 SETS 1, "data.json"
-TEXEC 0x4005, 1, 2          # R2 = "1" or "0"
-ATOI 3, 2                   # R3 = 1 or 0
-SET 4, 1
-CMP 3, 4
+TEXEC 0x4005, 1, 2          # R2 = "true" or "false"
+SETS 3, "true"
+SCMP 2, 3                   # String compare
 BEQ FileExists
 ```
 
@@ -347,19 +346,20 @@ BEQ FileExists
 |----|------|------|-----------|
 | `0x6000` | JSON_LOAD | "path" | `regs[dest] = json.load(path)` |
 | `0x6001` | JSON_SAVE | "path\|json" | `json.save(path, json)` |
-| `0x6002` | JSON_GET | "json\|key" | `regs[dest] = json[key]` |
-| `0x6003` | JSON_SET | "json\|key\|value" | `regs[dest] = json.set(key, value)` |
-| `0x6004` | JSON_PARSE | "json_str" | `regs[dest] = parse(json_str)` |
+| `0x6002` | JSON_GET | "key" | `regs[dest] = memory_store[key]` (from HashMap) |
+| `0x6003` | JSON_SET | "key\|value" | `memory_store[key] = value` |
+| `0x6004` | JSON_PARSE | "json_str\|field" | `regs[dest] = extract_field(json_str, field)` |
 
 ```asm
 # Example: Parse JSON and extract field
-SETS 1, "{\"name\":\"Alice\",\"age\":30}"
-TEXEC 0x6004, 1, 2          # R2 = parsed JSON handle
+# JSON_PARSE format: "json_str|field_path"
+SETS 1, "{\"name\":\"Alice\",\"age\":30}|name"
+TEXEC 0x6004, 1, 2          # JSON_PARSE -> R2 = "Alice"
+TEXEC 0x5000, 2, 0          # Print "Alice"
 
-SETS 3, "name"
-SCAT 4, 2, 3                # Combine handle with key (implementation detail)
-TEXEC 0x6002, 4, 5          # R5 = "Alice"
-TEXEC 0x5000, 5, 0          # Print "Alice"
+# Extract another field
+SETS 3, "{\"name\":\"Alice\",\"age\":30}|age"
+TEXEC 0x6004, 3, 4          # JSON_PARSE -> R4 = "30"
 ```
 
 #### Database (0x9xxx)
@@ -491,7 +491,7 @@ All `TEXEC` calls return a heap pointer to a JSON response string. The VM automa
 | DB_SELECT | JSON array string | `[{"id":1,"name":"Alice"}]` |
 | DB_INSERT | Last insert ID (integer as string) | `"1"` |
 | FILE_READ | File contents | `"Hello, World!"` |
-| FILE_EXISTS | Boolean as string | `"1"` or `"0"` |
+| FILE_EXISTS | Boolean as string | `"true"` or `"false"` |
 | HTTP_SERVE | Status message | `"served 100 requests"` |
 | PRINT/PRINTN | Empty string | `""` |
 | TIME | Unix timestamp string | `"1706745600"` |
@@ -1538,20 +1538,20 @@ RequestLoop:
     TEXEC 0x8008, 255, 0                # HTTP_LISTEN -> R0 = request JSON
     # R0 = {"method":"GET","path":"/api/posts?id=1","body":"...","addr":"..."}
 
-    # --- Extract method using JSON_GET ---
-    SETS 255, "method"
-    SCAT 1, 0, 255                       # R1 = request + "method"
-    TEXEC 0x6002, 1, 2                  # JSON_GET -> R2 = "GET" / "POST" / "DELETE"
+    # --- Extract method using JSON_PARSE ---
+    SETS 255, "|method"
+    SCAT 1, 0, 255                       # R1 = json + "|method"
+    TEXEC 0x6004, 1, 2                  # JSON_PARSE -> R2 = "GET" / "POST" / "DELETE"
 
     # --- Extract path ---
-    SETS 255, "path"
-    SCAT 3, 0, 255
-    TEXEC 0x6002, 3, 4                  # JSON_GET -> R4 = "/api/posts?id=1"
+    SETS 255, "|path"
+    SCAT 3, 0, 255                       # R3 = json + "|path"
+    TEXEC 0x6004, 3, 4                  # JSON_PARSE -> R4 = "/api/posts?id=1"
 
     # --- Extract body (for POST) ---
-    SETS 255, "body"
-    SCAT 5, 0, 255
-    TEXEC 0x6002, 5, 6                  # JSON_GET -> R6 = POST body
+    SETS 255, "|body"
+    SCAT 5, 0, 255                       # R5 = json + "|body"
+    TEXEC 0x6004, 5, 6                  # JSON_PARSE -> R6 = POST body
 
     # ========================================
     # ROUTING: Compare method and path
@@ -1634,15 +1634,15 @@ HandlePost:
     # Parse JSON body and insert
     # Body format: {"title":"...","content":"..."}
 
-    # Extract title from body
-    SETS 42, "title"
-    SCAT 43, 6, 42
-    TEXEC 0x6002, 43, 44              # JSON_GET -> R44 = title
+    # Extract title from body using JSON_PARSE
+    SETS 42, "|title"
+    SCAT 43, 6, 42                     # R43 = body + "|title"
+    TEXEC 0x6004, 43, 44              # JSON_PARSE -> R44 = title
 
     # Extract content
-    SETS 45, "content"
-    SCAT 46, 6, 45
-    TEXEC 0x6002, 46, 47              # JSON_GET -> R47 = content
+    SETS 45, "|content"
+    SCAT 46, 6, 45                     # R46 = body + "|content"
+    TEXEC 0x6004, 46, 47              # JSON_PARSE -> R47 = content
 
     # Server-side: add timestamp (business logic in L-0!)
     TEXEC 0x5008, 255, 48             # R48 = current timestamp
@@ -1760,10 +1760,10 @@ RequestDone:
 
 | Feature | Implementation | L-0 Instructions Used |
 |---------|----------------|----------------------|
-| **Request Parsing** | Extract method, path, body from JSON | `JSON_GET` (0x6002), `SCAT` |
-| **Routing** | Compare path prefix and method | `CMP`, `BEQ`, `SLICE`, `HLEN` |
+| **Request Parsing** | Extract method, path, body from JSON | `JSON_PARSE` (0x6004), `SCAT` |
+| **Routing** | Compare path prefix and method | `SCMP`, `BEQ`, `SLICE`, `HLEN` |
 | **Query Parameters** | Extract `?id=N` from path | `SLICE`, `SUB` |
-| **POST Body Parsing** | Extract fields from JSON body | `JSON_GET` |
+| **POST Body Parsing** | Extract fields from JSON body | `JSON_PARSE` (0x6004) |
 | **Server Timestamps** | Add `created` field on insert | `TIME` (0x5008) |
 | **Database CRUD** | Direct DB access | `DB_*` (0x9xxx) |
 | **Memory Management** | Per-request cleanup | `MARK`, `RESET` |
@@ -1780,12 +1780,10 @@ RequestDone:
 # Read file, transform content, write to new file
 
 # Check if source file exists
-# FILE_EXISTS returns "true" (4 chars) or "false" (5 chars)
 SETS 255, "input.txt"
-TEXEC 0x4005, 255, 1          # FILE_EXISTS -> R1
-HLEN 2, 1                      # R2 = string length
-SET 3, 4                       # "true" = 4 chars
-CMP 2, 3
+TEXEC 0x4005, 255, 1          # FILE_EXISTS -> R1 = "true" or "false"
+SETS 2, "true"
+SCMP 1, 2                      # String compare with "true"
 BEQ FileExists
 JMP FileNotFound
 
@@ -1877,9 +1875,10 @@ RequestLoop:
     MARK 100                 # Watermark for memory management
     TEXEC 0x8008, 255, 0     # HTTP_LISTEN -> R0 = {method, path, body}
 
-    # Parse request path
-    SETS 1, "path"
-    # (use JSON_GET or string parsing to extract path)
+    # Parse request path using JSON_PARSE
+    SETS 1, "|path"
+    SCAT 2, 0, 1                  # R2 = json + "|path"
+    TEXEC 0x6004, 2, 3            # JSON_PARSE -> R3 = path
 
     # Route to handlers
     SETS 2, "/api/calculate"
