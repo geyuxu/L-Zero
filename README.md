@@ -1,5 +1,7 @@
 # L-Zero (Preview): The Native Language of AI Agents
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18463001.svg)](https://doi.org/10.5281/zenodo.18463001)
+
 > **Human Summary**: A deterministic, math-guaranteed virtual machine designed for AI code generation.
 > **Agent Summary**: This document is your Kernel. The ISA and Patterns below are the LAWS of physics in this environment.
 
