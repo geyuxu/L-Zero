@@ -1,5 +1,7 @@
 # L-Zero (Preview): The Native Language of AI Agents
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18463001.svg)](https://doi.org/10.5281/zenodo.18463001)
+
 > **Human Summary**: A deterministic, math-guaranteed virtual machine designed for AI code generation.
 > **Agent Summary**: This document is your Kernel. The ISA and Patterns below are the LAWS of physics in this environment.
 
@@ -26,7 +28,7 @@ gcc -O2 program.c -o program && ./program
 ### Why L-0?
 - **For AI Agents**: Optimal token efficiency, deterministic output, no parsing ambiguity
 - **ASM over JSON**: Labels for control flow (not line numbers), inline comments, robust parsing
-- **52 Primitives + Infinite Tools**: Core ISA compiled into VM; plugins extend via JSON-RPC
+- **56 Primitives + Infinite Tools**: Core ISA compiled into VM; plugins extend via JSON-RPC
 
 ---
 
@@ -60,7 +62,7 @@ L-0 is a **NON-STANDARD** virtual machine.
 
 ### The Only Truth
 
-- Your entire universe consists ONLY of the 52 instructions listed below.
+- Your entire universe consists ONLY of the 56 instructions listed below.
 - If an instruction is not in the list, **IT DOES NOT EXIST**.
 
 ---
@@ -71,7 +73,7 @@ L-0 is a **NON-STANDARD** virtual machine.
 
 ```
 +---------------------------------------------------------------+
-| Layer 1: ISA Core (54 primitives)                             |
+| Layer 1: ISA Core (56 primitives)                             |
 | ------------------------------------------------------------- |
 | - Register-based operations, compiled into VM                 |
 | - Fast, direct execution                                      |
@@ -115,7 +117,7 @@ L-0 is a **NON-STANDARD** virtual machine.
 └─────────────┴──────────────────────────────────────────────┘
 ```
 
-### The Holographic ISA (54 Instructions)
+### The Holographic ISA (56 Instructions)
 
 > **Every instruction shows its semantic execution. If you can't see the pseudocode, you don't understand the operation.**
 
@@ -125,8 +127,8 @@ L-0 is a **NON-STANDARD** virtual machine.
 | Registers | 4 | SET, SETS, MOV, SWAP |
 | Math | 5 | ADD, SUB, MUL, DIV, MOD |
 | Logic | 4 | AND, OR, XOR, NOT |
-| Control | 5 | CMP, JMP, BEQ, BGT, BLT |
-| Memory | 8 | NEW, FREE, READ, WRITE, READR, WRITER, STORE64, LOAD64 |
+| Control | 6 | CMP, SCMP, JMP, BEQ, BGT, BLT |
+| Memory | 9 | NEW, NEWR, FREE, READ, WRITE, READR, WRITER, STORE64, LOAD64 |
 | Batch | 4 | MEMCPY, HLEN, SLICE, MEMSET |
 | Extensions | 5 | TEXEC, ITOA, ATOI, SCAT, REGEX |
 | Vector | 7 | VNEW, VSET, VGET, VDOT, VSIM, VMAG, VNORM |
@@ -171,7 +173,8 @@ L-0 is a **NON-STANDARD** virtual machine.
 #### Control Flow
 | Syntax | Semantics | Example |
 |--------|-----------|---------|
-| `CMP a, b` | `flags = compare(regs[a], regs[b])` | `CMP 1, 2` |
+| `CMP a, b` | `flags = compare(regs[a], regs[b])` (integer) | `CMP 1, 2` |
+| `SCMP a, b` | `flags = strcmp(heap[regs[a]], heap[regs[b]])` (string) | `SCMP 1, 2` |
 | `JMP label` | `pc = label` | `JMP Loop` |
 | `BEQ label` | `if flags.EQ: pc = label` | `BEQ Done` |
 | `BGT label` | `if flags.GT: pc = label` | `BGT Bigger` |
@@ -181,6 +184,7 @@ L-0 is a **NON-STANDARD** virtual machine.
 | Syntax | Semantics | Example |
 |--------|-----------|---------|
 | `NEW d, size` | `regs[d] = heap_alloc(size)` ⚠️ size is **literal** | `NEW 1, 256` |
+| `NEWR d, r` | `regs[d] = heap_alloc(regs[r])` (dynamic size) | `NEWR 1, 2` |
 | `FREE ptr` | `heap_free(regs[ptr])` | `FREE 1` |
 | `READ d, p, off` | `regs[d] = heap[regs[p]][off]` ⚠️ off is **literal** | `READ 2, 1, 0` |
 | `WRITE p, off, v` | `heap[regs[p]][off] = regs[v]` ⚠️ off is **literal** | `WRITE 1, 0, 2` |
@@ -319,7 +323,7 @@ TEXEC 0x5000, 3, 0          # "Current time: 1706745600"
 | `0x4001` | FILE_WRITE | "path\|content" | `write_file(path, content)` |
 | `0x4003` | FILE_DELETE | "path" | `delete_file(path)` |
 | `0x4004` | FILE_LIST | "dir" | `regs[dest] = list_dir(dir)` |
-| `0x4005` | FILE_EXISTS | "path" | `regs[dest] = exists(path) ? "1" : "0"` |
+| `0x4005` | FILE_EXISTS | "path" | `regs[dest] = exists(path) ? "true" : "false"` |
 
 ```asm
 # Example: Read and print file
@@ -333,10 +337,9 @@ TEXEC 0x4001, 1, 0          # Write to output.txt
 
 # Example: Check if file exists
 SETS 1, "data.json"
-TEXEC 0x4005, 1, 2          # R2 = "1" or "0"
-ATOI 3, 2                   # R3 = 1 or 0
-SET 4, 1
-CMP 3, 4
+TEXEC 0x4005, 1, 2          # R2 = "true" or "false"
+SETS 3, "true"
+SCMP 2, 3                   # String compare
 BEQ FileExists
 ```
 
@@ -345,19 +348,20 @@ BEQ FileExists
 |----|------|------|-----------|
 | `0x6000` | JSON_LOAD | "path" | `regs[dest] = json.load(path)` |
 | `0x6001` | JSON_SAVE | "path\|json" | `json.save(path, json)` |
-| `0x6002` | JSON_GET | "json\|key" | `regs[dest] = json[key]` |
-| `0x6003` | JSON_SET | "json\|key\|value" | `regs[dest] = json.set(key, value)` |
-| `0x6004` | JSON_PARSE | "json_str" | `regs[dest] = parse(json_str)` |
+| `0x6002` | JSON_GET | "key" | `regs[dest] = memory_store[key]` (from HashMap) |
+| `0x6003` | JSON_SET | "key\|value" | `memory_store[key] = value` |
+| `0x6004` | JSON_PARSE | "json_str\|field" | `regs[dest] = extract_field(json_str, field)` |
 
 ```asm
 # Example: Parse JSON and extract field
-SETS 1, "{\"name\":\"Alice\",\"age\":30}"
-TEXEC 0x6004, 1, 2          # R2 = parsed JSON handle
+# JSON_PARSE format: "json_str|field_path"
+SETS 1, "{\"name\":\"Alice\",\"age\":30}|name"
+TEXEC 0x6004, 1, 2          # JSON_PARSE -> R2 = "Alice"
+TEXEC 0x5000, 2, 0          # Print "Alice"
 
-SETS 3, "name"
-SCAT 4, 2, 3                # Combine handle with key (implementation detail)
-TEXEC 0x6002, 4, 5          # R5 = "Alice"
-TEXEC 0x5000, 5, 0          # Print "Alice"
+# Extract another field
+SETS 3, "{\"name\":\"Alice\",\"age\":30}|age"
+TEXEC 0x6004, 3, 4          # JSON_PARSE -> R4 = "30"
 ```
 
 #### Database (0x9xxx)
@@ -489,7 +493,7 @@ All `TEXEC` calls return a heap pointer to a JSON response string. The VM automa
 | DB_SELECT | JSON array string | `[{"id":1,"name":"Alice"}]` |
 | DB_INSERT | Last insert ID (integer as string) | `"1"` |
 | FILE_READ | File contents | `"Hello, World!"` |
-| FILE_EXISTS | Boolean as string | `"1"` or `"0"` |
+| FILE_EXISTS | Boolean as string | `"true"` or `"false"` |
 | HTTP_SERVE | Status message | `"served 100 requests"` |
 | PRINT/PRINTN | Empty string | `""` |
 | TIME | Unix timestamp string | `"1706745600"` |
@@ -590,6 +594,11 @@ substr_done:
 # ==================================================================
 # strcmp: Compare two strings (lexicographic)
 # ==================================================================
+# NOTE: For simple equality checks, use SCMP instruction instead:
+#       SCMP 0, 1    # Compare strings in R0 and R1, sets flags
+#       BEQ equal    # Jump if strings are equal
+#
+# This pattern is for when you need the -1/0/1 result value.
 # Input:  R0 = string1 pointer, R1 = string2 pointer
 # Output: R0 = 0 if equal, -1 if s1<s2, 1 if s1>s2
 # Clobbers: R4, R5, R6, R7, R8
@@ -722,9 +731,11 @@ print_int_done:
 # ==================================================================
 # Input:  R0 = capacity (bytes)
 # Output: R0 = buffer pointer, R1 = current length (0)
+# Clobbers: R50
 # ------------------------------------------------------------------
 sb_init:
-    NEW 0, 0              # Allocate R0 bytes
+    MOV 50, 0             # R50 = capacity (save R0)
+    NEWR 0, 50            # R0 = new heap allocation (size from R50)
     SET 1, 0              # Length = 0
 sb_init_done:
 
@@ -733,14 +744,15 @@ sb_init_done:
 # ==================================================================
 # Input:  R0 = buffer ptr, R1 = current len, R2 = string to append
 # Output: R1 = new length
-# Clobbers: R4, R5, R6
+# Clobbers: R4, R5
 # ------------------------------------------------------------------
 sb_append:
     # Get length of string to append
     HLEN 4, 2             # R4 = len(string)
+    SET 5, 0              # R5 = 0 (source offset)
 
     # Memcpy(dest=buf, dest_off=len, src=str, src_off=0, count=str_len)
-    MEMCPY 0, 1, 2, 0, 4
+    MEMCPY 0, 1, 2, 5, 4  # dst=R0, doff=R1, src=R2, soff=R5(0), len=R4
 
     # Update length
     ADD 1, 1, 4           # new_len = old_len + str_len
@@ -752,9 +764,11 @@ sb_append_done:
 # Input:  R0 = buffer ptr, R1 = length
 # Output: R0 = new string pointer
 # Note: Caller should FREE the original buffer if needed
+# Clobbers: R50
 # ------------------------------------------------------------------
 sb_finish:
-    SLICE 0, 0, 0, 1      # Create exact-sized string
+    SET 50, 0             # R50 = 0 (offset)
+    SLICE 0, 0, 50, 1     # Create exact-sized string (ptr=R0, off=R50(0), len=R1)
 sb_finish_done:
 ```
 
@@ -1069,7 +1083,7 @@ sqrt_int_done:
 array_new:
     SET 4, 8
     MUL 4, 0, 4            # R4 = count * 8 (bytes)
-    NEW 0, 4               # R0 = new heap allocation
+    NEWR 0, 4              # R0 = new heap allocation (size from R4)
 array_new_done:
 
 # ==================================================================
@@ -1526,20 +1540,20 @@ RequestLoop:
     TEXEC 0x8008, 255, 0                # HTTP_LISTEN -> R0 = request JSON
     # R0 = {"method":"GET","path":"/api/posts?id=1","body":"...","addr":"..."}
 
-    # --- Extract method using JSON_GET ---
-    SETS 255, "method"
-    SCAT 1, 0, 255                       # R1 = request + "method"
-    TEXEC 0x6002, 1, 2                  # JSON_GET -> R2 = "GET" / "POST" / "DELETE"
+    # --- Extract method using JSON_PARSE ---
+    SETS 255, "|method"
+    SCAT 1, 0, 255                       # R1 = json + "|method"
+    TEXEC 0x6004, 1, 2                  # JSON_PARSE -> R2 = "GET" / "POST" / "DELETE"
 
     # --- Extract path ---
-    SETS 255, "path"
-    SCAT 3, 0, 255
-    TEXEC 0x6002, 3, 4                  # JSON_GET -> R4 = "/api/posts?id=1"
+    SETS 255, "|path"
+    SCAT 3, 0, 255                       # R3 = json + "|path"
+    TEXEC 0x6004, 3, 4                  # JSON_PARSE -> R4 = "/api/posts?id=1"
 
     # --- Extract body (for POST) ---
-    SETS 255, "body"
-    SCAT 5, 0, 255
-    TEXEC 0x6002, 5, 6                  # JSON_GET -> R6 = POST body
+    SETS 255, "|body"
+    SCAT 5, 0, 255                       # R5 = json + "|body"
+    TEXEC 0x6004, 5, 6                  # JSON_PARSE -> R6 = POST body
 
     # ========================================
     # ROUTING: Compare method and path
@@ -1549,13 +1563,14 @@ RequestLoop:
     SETS 10, "/api/posts"
     HLEN 11, 4                          # R11 = len(path)
     HLEN 12, 10                         # R12 = len("/api/posts") = 11
-    SLICE 13, 4, 0, 12                  # R13 = first 11 chars of path
-    CMP 13, 10
+    SET 15, 0                           # R15 = 0 (offset for SLICE)
+    SLICE 13, 4, 15, 12                 # R13 = first 11 chars of path
+    SCMP 13, 10                         # String compare R13 vs R10
     BEQ ApiPostsRoute                   # Path starts with /api/posts
 
     # Check if path is "/"
     SETS 14, "/"
-    CMP 4, 14
+    SCMP 4, 14                          # String compare R4 vs R14
     BEQ ServeHtml                       # Serve HTML frontend
 
     # 404 for other paths
@@ -1565,17 +1580,17 @@ RequestLoop:
 # API ROUTES: /api/posts
 # ========================================
 ApiPostsRoute:
-    # Check method
+    # Check method (use SCMP for string comparison)
     SETS 20, "GET"
-    CMP 2, 20
+    SCMP 2, 20                          # String compare method vs "GET"
     BEQ HandleGet
 
     SETS 21, "POST"
-    CMP 2, 21
+    SCMP 2, 21                          # String compare method vs "POST"
     BEQ HandlePost
 
     SETS 22, "DELETE"
-    CMP 2, 22
+    SCMP 2, 22                          # String compare method vs "DELETE"
     BEQ HandleDelete
 
     JMP MethodNotAllowed
@@ -1621,15 +1636,15 @@ HandlePost:
     # Parse JSON body and insert
     # Body format: {"title":"...","content":"..."}
 
-    # Extract title from body
-    SETS 42, "title"
-    SCAT 43, 6, 42
-    TEXEC 0x6002, 43, 44              # JSON_GET -> R44 = title
+    # Extract title from body using JSON_PARSE
+    SETS 42, "|title"
+    SCAT 43, 6, 42                     # R43 = body + "|title"
+    TEXEC 0x6004, 43, 44              # JSON_PARSE -> R44 = title
 
     # Extract content
-    SETS 45, "content"
-    SCAT 46, 6, 45
-    TEXEC 0x6002, 46, 47              # JSON_GET -> R47 = content
+    SETS 45, "|content"
+    SCAT 46, 6, 45                     # R46 = body + "|content"
+    TEXEC 0x6004, 46, 47              # JSON_PARSE -> R47 = content
 
     # Server-side: add timestamp (business logic in L-0!)
     TEXEC 0x5008, 255, 48             # R48 = current timestamp
@@ -1747,10 +1762,10 @@ RequestDone:
 
 | Feature | Implementation | L-0 Instructions Used |
 |---------|----------------|----------------------|
-| **Request Parsing** | Extract method, path, body from JSON | `JSON_GET` (0x6002), `SCAT` |
-| **Routing** | Compare path prefix and method | `CMP`, `BEQ`, `SLICE`, `HLEN` |
+| **Request Parsing** | Extract method, path, body from JSON | `JSON_PARSE` (0x6004), `SCAT` |
+| **Routing** | Compare path prefix and method | `SCMP`, `BEQ`, `SLICE`, `HLEN` |
 | **Query Parameters** | Extract `?id=N` from path | `SLICE`, `SUB` |
-| **POST Body Parsing** | Extract fields from JSON body | `JSON_GET` |
+| **POST Body Parsing** | Extract fields from JSON body | `JSON_PARSE` (0x6004) |
 | **Server Timestamps** | Add `created` field on insert | `TIME` (0x5008) |
 | **Database CRUD** | Direct DB access | `DB_*` (0x9xxx) |
 | **Memory Management** | Per-request cleanup | `MARK`, `RESET` |
@@ -1767,12 +1782,10 @@ RequestDone:
 # Read file, transform content, write to new file
 
 # Check if source file exists
-# FILE_EXISTS returns "true" (4 chars) or "false" (5 chars)
 SETS 255, "input.txt"
-TEXEC 0x4005, 255, 1          # FILE_EXISTS -> R1
-HLEN 2, 1                      # R2 = string length
-SET 3, 4                       # "true" = 4 chars
-CMP 2, 3
+TEXEC 0x4005, 255, 1          # FILE_EXISTS -> R1 = "true" or "false"
+SETS 2, "true"
+SCMP 1, 2                      # String compare with "true"
 BEQ FileExists
 JMP FileNotFound
 
@@ -1864,9 +1877,10 @@ RequestLoop:
     MARK 100                 # Watermark for memory management
     TEXEC 0x8008, 255, 0     # HTTP_LISTEN -> R0 = {method, path, body}
 
-    # Parse request path
-    SETS 1, "path"
-    # (use JSON_GET or string parsing to extract path)
+    # Parse request path using JSON_PARSE
+    SETS 1, "|path"
+    SCAT 2, 0, 1                  # R2 = json + "|path"
+    TEXEC 0x6004, 2, 3            # JSON_PARSE -> R3 = path
 
     # Route to handlers
     SETS 2, "/api/calculate"
@@ -2180,22 +2194,22 @@ TEXEC 0x9003, 255, 1   # R1 = sorted results
 | Operand count | Only 3 operands: `TEXEC tool, arg, dest` |
 | Multiple args | Use pipe delimiter: `SETS 255, "arg1\|arg2\|arg3"` |
 | Result type | Always returns string in heap, use ATOI if needed |
-| "PRINTN not found" | Use `TEXEC 0x5001` for PRINTLN, `TEXEC 0x5000` for PRINT |
+| Tool names | Use `TEXEC 0x5000` for PRINT (with newline), `TEXEC 0x5001` for PRINTN (no newline) |
 
 **Print Examples:**
 ```asm
-# PRINT (no newline)
+# PRINT (with newline) - 0x5000
 SETS 255, "Hello"
-TEXEC 0x5000, 255, 0
+TEXEC 0x5000, 255, 0   # Output: Hello\n
 
-# PRINTLN (with newline)
+# PRINTN (no newline) - 0x5001
 SETS 255, "World"
-TEXEC 0x5001, 255, 0
+TEXEC 0x5001, 255, 0   # Output: World (no newline)
 
-# Print integer
+# Print integer with newline
 SET 10, 42
-ITOA 11, 10          # R11 = "42"
-TEXEC 0x5001, 11, 0  # Print "42\n"
+ITOA 11, 10            # R11 = "42"
+TEXEC 0x5000, 11, 0    # Print "42\n"
 ```
 
 ### Control Flow
@@ -2271,7 +2285,7 @@ This script builds all workspace crates and creates a distribution package in `d
 .
 ├── Cargo.toml              # Workspace configuration
 ├── crates/                 # Core components
-│   ├── l0_core/            # ISA Definition (52 instructions)
+│   ├── l0_core/            # ISA Definition (56 instructions)
 │   ├── l0_vm/              # Virtual Machine
 │   ├── l0_asm/             # Assembler
 │   └── l0_compiler/        # AOT Compiler
@@ -2287,4 +2301,4 @@ This script builds all workspace crates and creates a distribution package in `d
 
 ---
 
-*L-0 Preview | 54 ISA Primitives | Semantic Computing | The Language of Autonomous AI*
+*L-0 Preview | 56 ISA Primitives | Semantic Computing | The Language of Autonomous AI*

@@ -42,7 +42,7 @@
             display: block;
             width: 225px;
             padding: 8px 0;
-            background: #6e7681;
+            background: var(--accent-green);
             color: #fff;
             font-size: 13px;
             font-weight: 600;
@@ -51,7 +51,11 @@
             top: 42px;
             right: -55px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-            cursor: default;
+            text-decoration: none;
+        }
+
+        .github-ribbon .ribbon-text:hover {
+            background: #2ea043;
         }
 
         .container {
@@ -320,9 +324,9 @@
     </style>
 </head>
 <body>
-    <div class="github-ribbon">
-        <span class="ribbon-text">Coming Soon</span>
-    </div>
+    <a class="github-ribbon" href="https://github.com/geyuxu/L-Zero" target="_blank">
+        <span class="ribbon-text">Open Source</span>
+    </a>
 
     <!-- Hero -->
     <header class="hero">
@@ -335,8 +339,8 @@
                 and watch it build.
             </p>
             <div class="cta-buttons">
-                <span class="btn btn-disabled">Download (Coming Soon)</span>
-                <span class="btn btn-disabled">README.md (Coming Soon)</span>
+                <a href="https://github.com/geyuxu/L-Zero/releases" class="btn btn-primary">Download</a>
+                <a href="https://github.com/geyuxu/L-Zero/blob/main/README.md" class="btn btn-secondary">README.md</a>
             </div>
         </div>
     </header>
@@ -423,7 +427,7 @@ HALT</code></pre>
 
                 <div class="feature-card">
                     <h3>Type-Safe by Design</h3>
-                    <p>54 instructions, each with a strict schema. If it compiles, it runs. No runtime type errors. No undefined behavior.</p>
+                    <p>56 instructions, each with a strict schema. If it compiles, it runs. No runtime type errors. No undefined behavior.</p>
                 </div>
 
                 <div class="feature-card">
@@ -473,7 +477,7 @@ HALT</code></pre>
                 </div>
                 <div class="principle">
                     <h4>Extensible Tools</h4>
-                    <p>Core ISA (54 instructions) + unlimited plugins. Add capabilities without changing the language.</p>
+                    <p>Core ISA (56 instructions) + unlimited plugins. Add capabilities without changing the language.</p>
                 </div>
             </div>
 
@@ -494,7 +498,7 @@ HALT</code></pre>
                     <h3>1. Download</h3>
                     <p>Grab the latest release for your platform from GitHub Releases. Includes all binaries and plugins.</p>
                     <p style="margin-top: 16px;">
-                        <span class="btn btn-disabled" style="display: inline-block;">Coming Soon</span>
+                        <a href="https://github.com/geyuxu/L-Zero/releases" class="btn btn-primary" style="display: inline-block;">Download</a>
                     </p>
                 </div>
 
@@ -502,7 +506,7 @@ HALT</code></pre>
                     <h3>2. Get README.md</h3>
                     <p>Copy README.md into your AI's context. This is the complete language reference - ISA, tools, examples, everything.</p>
                     <p style="margin-top: 16px;">
-                        <span class="btn btn-disabled" style="display: inline-block;">Coming Soon</span>
+                        <a href="https://github.com/geyuxu/L-Zero/blob/main/README.md" class="btn btn-secondary" style="display: inline-block;">View README</a>
                     </p>
                 </div>
             </div>
@@ -521,11 +525,11 @@ l0vm my_app.l0</code></pre>
     <footer>
         <div class="container">
             <p style="font-size: 1.2rem; color: var(--text-primary); margin-bottom: 16px;">
-                L-Zero v0.0.1 — The Native Language of AI Agents
+                L-Zero v0.0.2-preview — The Native Language of AI Agents
             </p>
             <p>
-                <span style="color: var(--text-secondary);">GitHub (Coming Soon)</span> ·
-                <span style="color: var(--text-secondary);">MIT License</span>
+                <a href="https://github.com/geyuxu/L-Zero">GitHub</a> ·
+                <a href="https://github.com/geyuxu/L-Zero/blob/main/LICENSE">MIT License</a>
             </p>
             <p style="margin-top: 24px; font-size: 0.9rem;">
                 You describe. AI builds. Machine executes.
